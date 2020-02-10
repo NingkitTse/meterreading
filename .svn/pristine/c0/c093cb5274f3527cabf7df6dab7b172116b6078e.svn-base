@@ -1,0 +1,336 @@
+package com.wasion.meterreading.task;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.http.HttpResponse;
+import org.json.JSONException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.wasion.meterreading.constant.SystemConstant;
+import com.wasion.meterreading.entity.RtTaskOnlineV1910;
+import com.wasion.meterreading.entity.TCfgAppsConfig;
+import com.wasion.meterreading.entity.TCfgProtocolCmd;
+import com.wasion.meterreading.entity.TRunMeterDocu;
+import com.wasion.meterreading.entity.TRunMeterDocuId;
+import com.wasion.meterreading.orm.jpa.RtTaskOnlineV1910Repository;
+import com.wasion.meterreading.orm.jpa.TCfgProtocolCmdRepository;
+import com.wasion.meterreading.orm.jpa.TRunMeterDocuRepository;
+import com.wasion.meterreading.service.impl.cache.AppConfigCacheService;
+import com.wasion.meterreading.util.CommonUtil;
+
+import cmcciot.onenet.nbapi.sdk.api.online.ExecuteOpe;
+import cmcciot.onenet.nbapi.sdk.entity.ExecuteOffline;
+import telecom.sdk.service.commandDelivery.CreateDeviceCommand;
+import telecom.sdk.utils.HttpsUtil;
+
+/**
+ * 【水表命令执行】任务
+ * 
+ * @author w24882
+ * @date 2019年11月13日
+ */
+@ConditionalOnProperty(name = "task.iot.command.process.enable", havingValue = "true")
+@Component
+public class CommandProcessTask {
+
+	private static final Logger LOG = LoggerFactory.getLogger(CommandProcessTask.class);
+	/**
+	 * 未执行标识
+	 */
+	private static final Integer STATE_NOT_EXECUTE = -1;
+	/**
+	 * 成功标识
+	 */
+	private static final Integer STATE_EXECUTE_SUCCESS = 1;
+	/**
+	 * 失败标识
+	 */
+	private static final Integer STATE_EXECUTE_FAILURE = 0;
+
+	private static final String PROTOCOL_NO_IMEI = "JCM0100";
+	private static final String PROTOCOL_NO_DEVICE_ID = "JCM0101";
+	private static final String PROTOCOL_NO_PLATFORM = "JCM0109";
+	@Autowired
+	private AppConfigCacheService cacheService;
+	@Autowired
+	private RtTaskOnlineV1910Repository taskRepo;
+	@Autowired
+	private TCfgProtocolCmdRepository cmdRepo; // 命令仓库
+	@Autowired
+	private TRunMeterDocuRepository docuRepo; // 表计拓展参数仓库
+	/**
+	 * 异步任务服务
+	 */
+	private ExecutorService executor = Executors.newCachedThreadPool(new ThreadFactory() {
+		private final AtomicInteger poolNumber = new AtomicInteger(1);
+
+		@Override
+		public Thread newThread(Runnable r) {
+			return new Thread(r, "Command-Process-" + poolNumber.getAndIncrement() + "-Thread");
+		}
+	});
+	/**
+	 * 任务优先级比较器
+	 */
+	private Comparator<RtTaskOnlineV1910> comparator = new Comparator<RtTaskOnlineV1910>() {
+
+		/**
+		 * 优先级大的在前
+		 */
+		@Override
+		public int compare(RtTaskOnlineV1910 o1, RtTaskOnlineV1910 o2) {
+			return -(o1.getCommandPriority() - o2.getCommandPriority());
+		}
+	};
+	private List<RtTaskOnlineV1910> tasks = new ArrayList<>();
+	private List<RtTaskOnlineV1910> successCommands = new ArrayList<>();
+	private List<RtTaskOnlineV1910> failCommands = new ArrayList<>();
+	private Map<RtTaskOnlineV1910, Future<HttpResponse>> telecomFutureMap = new HashMap<>();
+	private Map<RtTaskOnlineV1910, Future<org.json.JSONObject>> mobileFutureMap = new HashMap<>();
+
+	@Scheduled(cron = "0/2 * * * * *")
+	public void scheduled() {
+		tasks = taskRepo.findBySuccess(STATE_NOT_EXECUTE);
+		successCommands.clear();
+		failCommands.clear();
+		telecomFutureMap.clear();
+
+		if (CollectionUtils.isEmpty(tasks)) {
+			return;
+		}
+		// 按照优先级先排一波序
+		Collections.sort(tasks, comparator);
+		submitCommand2IotPlatform();
+		processTelecomSubmitResult();
+		processMobileSubmitResult();
+		taskRepo.saveAll(tasks);
+		LOG.info("Success num-> {}, Failure num-> {}, Total num-> {}", successCommands.size(), failCommands.size(),
+				tasks.size());
+	}
+
+	private void processMobileSubmitResult() {
+		if (mobileFutureMap.isEmpty()) {
+			return;
+		}
+		for (Entry<RtTaskOnlineV1910, Future<org.json.JSONObject>> entry : mobileFutureMap.entrySet()) {
+			RtTaskOnlineV1910 command = entry.getKey();
+			Integer maxExecuteTimes = command.getMaxExecuteTimes();
+			Integer executedTimes = command.getExecutedTimes();
+			Future<org.json.JSONObject> future = entry.getValue();
+			try {
+				org.json.JSONObject jsonObject = future.get();
+				int errno = jsonObject.getInt("errno");
+				if (0 == errno) {
+					String wlwCommandId = jsonObject.getString("uuid");
+					command.setCommandId(wlwCommandId);
+					successCommands.add(command);
+				} else {
+					String error = jsonObject.getString("error");
+					LOG.warn("Publish command to mobile failed, command: {}, reason: {}", command, error);
+					String traceId = CommonUtil.getUuid();
+					if (executedTimes >= maxExecuteTimes) {
+						command.setSuccess(STATE_EXECUTE_FAILURE);
+						command.setRemark("下发命令失败, traceId:" + traceId);
+						command.setExceptionCode(500);
+					}
+					failCommands.add(command);
+				}
+			} catch (InterruptedException | ExecutionException | JSONException e) {
+				LOG.error("Publish command to mobile failed, command: {}", command, e);
+				String traceId = CommonUtil.getUuid();
+				if (executedTimes >= maxExecuteTimes) {
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setRemark("下发命令失败, traceId:" + traceId);
+					command.setExceptionCode(500);
+				}
+				failCommands.add(command);
+			}
+		}
+	}
+
+	private void processTelecomSubmitResult() {
+		if (telecomFutureMap.isEmpty()) {
+			return;
+		}
+		for (Entry<RtTaskOnlineV1910, Future<HttpResponse>> entry : telecomFutureMap.entrySet()) {
+			RtTaskOnlineV1910 command = entry.getKey();
+			Integer maxExecuteTimes = command.getMaxExecuteTimes();
+			Integer executedTimes = command.getExecutedTimes();
+			Future<HttpResponse> future = entry.getValue();
+			try {
+				HttpResponse response = future.get();
+				if (null == response) {
+					LOG.error("Publish command to platform failed, command: {}", command);
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setExceptionCode(500);
+					failCommands.add(command);
+					continue;
+				}
+				final int statusCode = response.getStatusLine().getStatusCode();
+				if (statusCode == HttpStatus.CREATED.value()) {
+					String responseBody = HttpsUtil.getInstance().getHttpResponseBody(response);
+					JSONObject rspObj = JSON.parseObject(responseBody);
+					String status = rspObj.getString("status");
+					String commandId = rspObj.getString("commandId");
+					command.setWlwCmdStatus(status);
+					command.setCommandId(commandId);
+					command.setSuccess(STATE_EXECUTE_SUCCESS);
+					successCommands.add(command);
+				} else {
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setExceptionCode(statusCode);
+					failCommands.add(command);
+				}
+			} catch (InterruptedException | ExecutionException | UnsupportedOperationException | IOException e1) {
+				LOG.error("Publish command to platform failed, command: {}", command);
+				String traceId = CommonUtil.getUuid();
+				if (executedTimes >= maxExecuteTimes) {
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setRemark("下发命令失败, traceId:" + traceId);
+					command.setExceptionCode(500);
+				}
+				failCommands.add(command);
+			}
+		}
+	}
+
+	private void submitCommand2IotPlatform() {
+		for (RtTaskOnlineV1910 task : tasks) {
+			Integer executedTimes = task.getExecutedTimes() == null ? 1 : task.getExecutedTimes() + 1;
+			Integer maxExecuteTimes = task.getMaxExecuteTimes() == null ? 0 : task.getMaxExecuteTimes();
+			task.setExecutedTimes(executedTimes);
+			task.setMaxExecuteTimes(maxExecuteTimes);
+
+			String parameters = task.getParameters();
+			String appid = task.getWlwAppId();
+			String cmdId = task.getSnProtocolCommand();
+			String snMeter = task.getSnMeter();
+
+			// 查询设备所属平台
+			Optional<TRunMeterDocu> docuPlatformOp = docuRepo
+					.findById(new TRunMeterDocuId(snMeter, PROTOCOL_NO_PLATFORM));
+			if (!docuPlatformOp.isPresent()) {
+				if (executedTimes >= maxExecuteTimes) {
+					task.setSuccess(STATE_EXECUTE_FAILURE);
+					task.setRemark("Docu配置Platform不存在");
+					task.setExceptionCode(500);
+				}
+				failCommands.add(task);
+				continue;
+			}
+			String platform = docuPlatformOp.get().getParamValue();
+
+			// 查询命令配置
+			TCfgAppsConfig appConfig = cacheService.getValue(appid);
+			Optional<TCfgProtocolCmd> cmdOp = cmdRepo.findById(cmdId);
+			if (!cmdOp.isPresent()) {
+				if (executedTimes >= maxExecuteTimes) {
+					task.setSuccess(STATE_EXECUTE_FAILURE);
+					task.setRemark("命令不存在");
+					task.setExceptionCode(500);
+				}
+				failCommands.add(task);
+				continue;
+			}
+			TCfgProtocolCmd protocolCmd = cmdOp.get();
+			
+			// 处理不同平台的命令下发
+			if (SystemConstant.PLATFORM_TELECOM.equals(platform)) {
+				String serviceId = protocolCmd.getServiceId();
+				String method = protocolCmd.getMethod();
+
+				// 查询设备ID
+				Optional<TRunMeterDocu> docuDeviceIdOp = docuRepo
+						.findById(new TRunMeterDocuId(snMeter, PROTOCOL_NO_DEVICE_ID));
+				if (!cmdOp.isPresent()) {
+					if (executedTimes >= maxExecuteTimes) {
+						task.setSuccess(STATE_EXECUTE_FAILURE);
+						task.setRemark("Docu配置DeviceId不存在");
+						task.setExceptionCode(500);
+					}
+					failCommands.add(task);
+					continue;
+				}
+				String deviceId = docuDeviceIdOp.get().getParamValue();
+
+				Future<HttpResponse> submit = executor.submit(() -> {
+					try {
+						String baseUrl = appConfig.getBaseUrl();
+						String secret = appConfig.getSecret();
+						return CreateDeviceCommand.submitDeviceCommand(baseUrl, appid, secret, serviceId, method,
+								deviceId, JSON.parseObject(parameters));
+					} catch (Exception e1) {
+						e1.printStackTrace();
+					}
+					return null;
+				});
+				telecomFutureMap.put(task, submit);
+			} else if (SystemConstant.PLATFORM_MOBILE.equals(platform)) {
+				// 查询设备唯一标识
+				Optional<TRunMeterDocu> docuImeiOp = docuRepo.findById(new TRunMeterDocuId(snMeter, PROTOCOL_NO_IMEI));
+				if (!cmdOp.isPresent()) {
+					if (executedTimes >= maxExecuteTimes) {
+						task.setSuccess(STATE_EXECUTE_FAILURE);
+						task.setRemark("Docu配置IMEI不存在");
+						task.setExceptionCode(500);
+					}
+					failCommands.add(task);
+					continue;
+				}
+				String imei = docuImeiOp.get().getParamValue();
+				Future<org.json.JSONObject> submit = executor.submit(() -> {
+					Integer objId = 3200;
+					Integer objInstId = 0;
+					Integer resId = 5750;
+					ExecuteOffline executeOffline = new ExecuteOffline(imei, objId, objInstId, resId);
+
+					Calendar calendar = Calendar.getInstance();
+					calendar.setTime(new Date());
+					calendar.add(Calendar.DAY_OF_MONTH, 1);
+					executeOffline.setExpiredTime(calendar.getTime());
+
+					// TODO 组装帧数据
+					String frameValue = "68";
+
+					org.json.JSONObject requestBody = new org.json.JSONObject();
+					try {
+						requestBody.put("args", frameValue);
+					} catch (JSONException e) {
+						e.printStackTrace();
+					}
+
+					ExecuteOpe executeOpe = new ExecuteOpe(appid);
+					org.json.JSONObject operation = executeOpe.operation(executeOffline, requestBody);
+					return operation;
+				});
+				mobileFutureMap.put(task, submit);
+			}
+
+		}
+	}
+}

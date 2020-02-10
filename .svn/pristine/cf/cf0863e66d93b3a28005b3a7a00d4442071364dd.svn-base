@@ -1,0 +1,62 @@
+package com.wasion.meterreading.service.impl.telecom;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.alibaba.fastjson.JSONObject;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext;
+import com.wasion.meterreading.service.UploadDataServiceI;
+import com.wasion.meterreading.service.impl.telecom.cr.CommandRspResolver;
+import com.wasion.meterreading.service.impl.telecom.ddc.DeviceDatasChangedResolver;
+import com.wasion.meterreading.service.impl.telecom.device.DeviceAddedResolver;
+import com.wasion.meterreading.service.impl.telecom.device.DeviceDeletedResolver;
+
+/**
+ * 移动上传数据解析实现类<br>
+ * 层级关系： 上报数据：【notifyType：【{serviceType， serviceData}】】
+ * 
+ * @author w24882
+ * @date 2019年10月28日
+ */
+@Service(value = "telecomUploadDataServiceImpl")
+public class UploadDataServiceImpl implements UploadDataServiceI {
+
+	private final static Logger LOG = LoggerFactory.getLogger(UploadDataServiceImpl.class);
+	@Autowired
+	private DeviceDatasChangedResolver deviceDatasChangedResolver;
+	@Autowired
+	private CommandRspResolver commandRspResolver;
+	@Autowired
+	private DeviceAddedResolver deviceAddResolver;
+	@Autowired
+	private DeviceDeletedResolver deviceDeletedResolver;
+
+	@Override
+	public void parseData(Object data) {
+		JSONObject requestBody = (JSONObject) data;
+		String notifyType = requestBody.getString("notifyType");
+		LOG.info("Telecom nofify type is {}.", notifyType);
+
+		TelecomContext context = new TelecomContext();
+		context.setData(requestBody);
+		switch (notifyType) {
+		case "deviceDatasChanged":
+			deviceDatasChangedResolver.resolve(context);
+			break;
+		case "commandRsp":
+			commandRspResolver.resolve(context);
+			break;
+		case "deviceAdd":
+			deviceAddResolver.resolve(context);
+			break;
+		case "deviceDeleted":
+			deviceDeletedResolver.resolve(context);
+			break;
+		default:
+			break;
+		}
+	}
+
+}

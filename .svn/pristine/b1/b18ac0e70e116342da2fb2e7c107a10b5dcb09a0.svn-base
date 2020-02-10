@@ -1,0 +1,11 @@
+package com.wasion.meterreading.domain.dto.telecom;
+
+/**
+ * 电信平台数据详情
+ * 
+ * @author w24882
+ * @date 2019年10月28日
+ */
+public interface ServiceDataDetail {
+
+}

@@ -1,0 +1,12 @@
+package com.wasion.meterreading.service;
+
+import java.util.List;
+import java.util.Map;
+
+public interface ResolveServiceI<T> {
+	
+	public T resolveData(Map<String, Object> baseDataMap, String dataStr);
+	
+	public List<T> resolveDataList(Map<String, Object> baseDataMap, String dataStr);
+
+}

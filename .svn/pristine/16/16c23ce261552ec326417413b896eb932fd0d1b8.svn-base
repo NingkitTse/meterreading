@@ -1,0 +1,132 @@
+package com.wasion.meterreading.domain;
+
+import java.util.Date;
+
+import javax.persistence.Column;
+import javax.persistence.EmbeddedId;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+
+@Entity
+@Table(name = "DT_WTR_EVENT_REPORTING")
+public class EventReportValue extends UploadData implements Cloneable {
+
+	/**
+	 * 序列化版本ID
+	 */
+	private static final long serialVersionUID = 8277666906809201171L;
+
+	public static enum EventCodeEnum {
+
+		/**
+		 * 磁干扰
+		 */
+		MagneticDisturbance("0x50", "磁干扰"),
+		/**
+		 * M天不走水
+		 */
+		MDayNoWater("0x51", "M天不走水"),
+		/**
+		 * 数据总清零
+		 */
+		DataAlwaysClear("0x52", "数据总清零"),
+		/**
+		 * 阀门故障
+		 */
+		ValveFailure("0x53", "阀门故障"),
+		/**
+		 * 过流故障
+		 */
+		FlowFailure("0x54", "过流故障"),
+		/**
+		 * 泄露
+		 */
+		LetOut("0x55", "泄露"),
+		/**
+		 * 欠压
+		 */
+		UnderVoltage("0x56", "欠压"),
+		/**
+		 * 掉电
+		 */
+		PowerDown("0x57", "掉电");
+
+		public final String eventCode;
+		public final String eventDesp;
+
+		EventCodeEnum(String eventCode, String eventDesp) {
+			this.eventCode = eventCode;
+			this.eventDesp = eventDesp;
+		}
+	}
+
+	@EmbeddedId
+	private EventReportId id;
+
+	@Column(name = "EVENT_CODE")
+	private EventCodeEnum eventCode;
+
+	@Column(name = "EVENT_CONTENT")
+	private String eventContent;
+	/**
+	 * 事件结束时间
+	 */
+	private Date endDateTime;
+
+	private Double cumulant; // 累积量（表盘值）
+
+	public EventReportId getId() {
+		return id;
+	}
+
+	public void setId(EventReportId id) {
+		this.id = id;
+	}
+
+	public EventCodeEnum getEventCode() {
+		return eventCode;
+	}
+
+	public void setEventCode(EventCodeEnum eventCode) {
+		this.eventCode = eventCode;
+		this.eventContent = eventCode.eventDesp;
+	}
+
+	public String getEventContent() {
+		return eventContent;
+	}
+
+	public void setEventContent(String eventContent) {
+		this.eventContent = eventContent;
+	}
+
+	public Date getEndDateTime() {
+		return endDateTime;
+	}
+
+	public void setEndDateTime(Date endDateTime) {
+		this.endDateTime = endDateTime;
+	}
+
+	public Double getCumulant() {
+		return cumulant;
+	}
+
+	public void setCumulant(Double cumulant) {
+		this.cumulant = cumulant;
+	}
+
+	@Override
+	public Object clone() throws CloneNotSupportedException {
+		final EventReportValue clone = (EventReportValue) super.clone();
+		EventReportId eventReportId = new EventReportId();
+		eventReportId.setSnMeter(this.id.getSnMeter());
+		final Date startDateTime = this.id.getStartDateTime();
+		if (null != startDateTime) {
+			eventReportId.setStartDateTime(new Date(startDateTime.getTime()));
+		}
+		clone.setId(eventReportId);
+		return clone;
+	}
+
+}

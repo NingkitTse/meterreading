@@ -1,0 +1,229 @@
+package com.wasion.meterreading.task.process.mobile;
+
+import java.text.ParseException;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.stereotype.Component;
+
+import com.wasion.meterreading.config.OnenetProperties;
+import com.wasion.meterreading.constant.SystemConstant;
+import com.wasion.meterreading.domain.dto.ResolveContext.DataMapKey;
+import com.wasion.meterreading.domain.dto.mobile.MobileContext;
+import com.wasion.meterreading.entity.RtTaskOnlineV1910;
+import com.wasion.meterreading.entity.TCfgAppsConfig;
+import com.wasion.meterreading.entity.TCfgProtocolCmd;
+import com.wasion.meterreading.entity.TCfgProtocolCmdParam;
+import com.wasion.meterreading.entity.freezedata.DayFreezeDataValue;
+import com.wasion.meterreading.entity.freezedata.FreezeDataValue;
+import com.wasion.meterreading.exception.MRException;
+import com.wasion.meterreading.exception.MRExceptionEnum;
+import com.wasion.meterreading.orm.jpa.TCfgProtocolCmdParamRepository;
+import com.wasion.meterreading.service.impl.mobile.ddc.MobileDdcResolver;
+import com.wasion.meterreading.task.context.CommandContext;
+import com.wasion.meterreading.task.process.CommandSender;
+import com.wasion.meterreading.util.ContextProvider;
+import com.wasion.meterreading.util.DateUtil;
+
+import cmcciot.onenet.nbapi.sdk.api.online.ReadOpe;
+import cmcciot.onenet.nbapi.sdk.entity.GetSingleDeviceDP;
+import cmcciot.onenet.nbapi.sdk.entity.builder.SingleDeviceDpBuilder;
+
+/**
+ * 电信历史上报数据查询Sender
+ * 日冻结、点冻结、月冻结查询可现行查看上报历史记录，若历史记录没有查询到才去下命令
+ *
+ * @author w24882 xieningjie
+ * @date 2020年1月6日
+ */
+@EnableConfigurationProperties(value = OnenetProperties.class)
+@Component
+public class MobileQueryHisSender implements CommandSender {
+
+    private final static Logger LOG = LoggerFactory.getLogger(MobileQueryHisSender.class);
+    @Autowired
+    private TCfgProtocolCmdParamRepository cmdParamRepo; // 命令参数仓库
+    @Autowired
+    private OnenetProperties p;
+    @Autowired
+    private MobileDdcResolver mobileDdcResolver;
+
+    @Override
+    public void sendCommand(CommandContext context) {
+        TCfgProtocolCmd protocolCmd = context.getProtocolCmd();
+        String method = protocolCmd.getMethod();
+        switch (method) {
+        case "00F3": 
+        case "F300": // 表码查询
+            queryHis(context);
+            break;
+        default:
+            context.process();
+            break;
+        }
+    }
+
+    /**
+     * 查询历史响应报文
+     * 
+     * <pre>
+     * {
+            "errno": 0,
+            "data": {
+                "count": 1,
+                "datastreams": [
+                    {
+                        "datapoints": [
+                            {
+                                "at": "2020-01-06 02:54:11.057",
+                                "value": "681071565022180400813D00F1010000000000000000000006012000000000000000000000000000000000000000000000000000000000670399FFF6FF4AFFFFFFFFFFFFFFFF0000DD16"
+                            }
+                        ],
+                        "id": "3200_0_5750"
+                    }
+                ]
+            },
+            "error": "succ"
+        }
+     * </pre>
+     * 
+     * @param context
+     * @author w24882 xieningjie
+     * @date 2020年1月6日
+     */
+    private void queryHis(CommandContext context) {
+        TCfgAppsConfig appConfig = context.getAppConfig();
+        String[] parameters = context.getParameters().split(",");
+        String cmdId = context.getCmdId();
+        String appid = appConfig.getAppid();
+        String baseUrl = appConfig.getBaseUrl();
+        RtTaskOnlineV1910 task = context.getTask();
+
+        String deviceId = context.getDeviceId();
+        List<TCfgProtocolCmdParam> cmdParms = cmdParamRepo.findByCmdIdAndParamTypeOrderByParamNo(cmdId, "1");
+        Date startTime = null;
+        Date endTime = null;
+        String dataType = "01";
+        int dataNumber = 1;
+        int index = 0;
+        for (TCfgProtocolCmdParam param : cmdParms) {
+            String parameterValue = parameters[index];
+            switch (param.getParamKey()) {
+            case "startTime":
+                try {
+                    startTime = DateUtil.parseDateYyyyMmDdHhMmSs(parameterValue);
+                } catch (ParseException e) {
+                    LOG.error("Start time format is invalid.");
+                    throw new MRException(MRExceptionEnum.CommandParamFormatInvalid, "Start time");
+                }
+                break;
+            case "dataNumber":
+                dataNumber = Integer.parseInt(parameterValue);
+                break;
+            case "dataType":
+                dataType = parameterValue;
+                break;
+            default:
+                break;
+            }
+            index++;
+        }
+        if (!"01".equals(dataType)) { // 01 日冻结 02 月冻结 03 点冻结，先只支持日冻结查历史
+            context.process();
+            return;
+        }
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(startTime);
+        calendar.set(Calendar.HOUR_OF_DAY, 0);
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.SECOND, 0);
+        startTime = calendar.getTime();
+        calendar.add(Calendar.DAY_OF_MONTH, dataNumber < 1 ? 1 : dataNumber);
+        endTime = calendar.getTime();
+        // 调用平台读历史接口
+        GetSingleDeviceDP getSingleDeviceDP = null;
+        JSONObject result = null;
+        try {
+            getSingleDeviceDP = SingleDeviceDpBuilder.build().setDeviceId(deviceId).setBaseUrl(baseUrl).setStart(DateUtil.formatDateYYYYMMTDDHHMMSS(startTime))
+                    .setEnd(DateUtil.formatDateYYYYMMTDDHHMMSS(endTime)).setObjId(p.getObjId()).setObjInstId(p.getObjInstId()).setResId(p.getReadResId()).create();
+            ReadOpe readOpe = new ReadOpe(appid);
+            result = readOpe.operation(getSingleDeviceDP, new JSONObject());
+            int errno = result.getInt("errno");
+            String error = result.getString("error");
+            if (errno != 0) {
+                LOG.info("Query history failed. TraceId: {}, Reason: {}", task.getTraceId(), error);
+                context.process(); // 执行下一步下发命令
+                return;
+            } else {
+                JSONArray jsonArray = result.getJSONObject("data").getJSONArray("datastreams");
+                final int dataStreamsLen = jsonArray.length();
+                if (dataStreamsLen == 0) {
+                    LOG.info("There is no history data of device {} at {}.", deviceId, startTime);
+                    context.process(); // 执行下一步下发命令
+                    return;
+                }
+
+                boolean querySucceed = false;
+                JSONObject datastream = jsonArray.getJSONObject(0);
+                String id = datastream.getString("id");
+                JSONArray datapoints = datastream.getJSONArray("datapoints");
+                int datapointsLen = datapoints.length();
+                JSONObject lastValidData = null;
+                Date lastDate = null;
+                for (int i = 0; i < datapointsLen; ++i) {
+                    JSONObject datapoint = datapoints.getJSONObject(i);
+                    Date at = DateUtil.parseDateyyyyMMddHHmmssSSS(datapoint.getString("at"));
+                    String value = datapoint.getString("value");
+                    String frameDataType = value.substring(22, 26);
+                    if (!"F100".equals(frameDataType) && !"00F1".equals(frameDataType)) {
+                        continue;
+                    }
+                    querySucceed = true;
+                    if (null == lastDate || at.after(lastDate)) {
+                        lastDate = at;
+                        lastValidData = datapoint;
+                        lastValidData.put("ds_id", id);
+                        lastValidData.put("at", at.getTime());
+                    }
+                }
+                if (querySucceed) {
+                    LOG.info("Found valid day freezen data in history, start to resolve it.");
+                    MobileContext mobileContext = new MobileContext();
+                    mobileContext.setDeviceId(deviceId);
+                    mobileContext.setData(lastValidData);
+                    mobileDdcResolver.resolve(mobileContext);
+                    FreezeDataValue value = (DayFreezeDataValue) mobileContext.get(DataMapKey.FREEZE_DATA_KEY);
+                    String freezenValue = value.getFreezenValue();
+                    task.setReturnData(dataType + SystemConstant.TASK_RETURN_DATA_SEPERATOR + freezenValue);
+                    context.success(task, "SUCCEED", "");
+                } else {
+                    LOG.info("There is no valid day freezen data in history.");
+                    context.process();
+                }
+            }
+        } catch (Exception e) {
+            LOG.info("Query history failed. TraceId: {}", task.getTraceId(), e);
+            context.process(); // 执行下一步下发命令
+        } finally {
+            LOG.info("Query history req: {}, resp: {}.", getSingleDeviceDP, result);
+        }
+    }
+
+    @Override
+    public boolean hasNext() {
+        return true;
+    }
+
+    @Override
+    public CommandSender next() {
+        return ContextProvider.getBean(MobileCmdSender.class);
+    }
+
+}

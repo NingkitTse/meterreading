@@ -1,0 +1,19 @@
+package com.wasion.meterreading.service;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 解析服务接口
+ * 
+ * @author w24882
+ * @date 2019年11月6日
+ * @param <T>
+ */
+public interface ResolveServiceI<T> {
+
+	public T resolveData(Map<String, Object> baseDataMap, String dataStr);
+
+	public List<T> resolveDataList(Map<String, Object> baseDataMap, String dataStr);
+
+}

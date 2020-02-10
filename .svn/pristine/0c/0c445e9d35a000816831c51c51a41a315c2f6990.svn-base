@@ -1,0 +1,18 @@
+package com.wasion.meterreading.task.process;
+
+import com.wasion.meterreading.exception.MRException;
+import com.wasion.meterreading.task.context.CommandContext;
+
+public interface CommandSender {
+
+    void sendCommand(CommandContext context) throws MRException;
+
+    default boolean hasNext() {
+        return false;
+    }
+
+    default CommandSender next() {
+        return null;
+    }
+
+}

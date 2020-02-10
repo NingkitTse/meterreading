@@ -1,0 +1,26 @@
+package com.wasion.meterreading.service.impl.mobile.device;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.domain.dto.ResolveContext;
+import com.wasion.meterreading.service.NotifyResolveServiceI;
+
+/**
+ * 移动上下线解析器
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年11月21日
+ */
+@Service
+public class MobileDeviceOnOffLineResolver implements NotifyResolveServiceI {
+	private static final Logger LOG = LoggerFactory.getLogger(MobileDeviceOnOffLineResolver.class);
+
+	@Override
+	public void resolve(ResolveContext context) {
+		// TODO 暂时没必要解析
+		LOG.info("设备<{}>上下线：", context.getDeviceId());
+	}
+
+}

@@ -1,0 +1,94 @@
+package com.wasion.meterreading.service.impl;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.domain.view.VMeterFreezenData;
+import com.wasion.meterreading.orm.jpa.FreezeDataViewRepository;
+import com.wasion.meterreading.service.CrudServiceI;
+
+@Service
+public class FrozenDataServiceImpl implements CrudServiceI<VMeterFreezenData> {
+
+	@Autowired
+	private FreezeDataViewRepository freezeDataViewRepository;
+
+	// @Override
+	// public Page<FreezeDataDto> findAll(FreezeDataDto record, Pageable
+	// pageable) {
+	// if (null == record) {
+	// return freezeDataViewRepository.findAll(pageable);
+	// }
+	// ExampleMatcher matcher = ExampleMatcher.matching() // 构建对象
+	// .withMatcher("imei", GenericPropertyMatchers.contains()) // 采用模糊匹配
+	// .withIgnorePaths("sn"); // 忽略属性：是否关注。因为是基本类型，需要忽略掉
+	// Example<FreezeDataDto> example = Example.of(record, matcher);
+	// return freezeDataViewRepository.findAll(example, pageable);
+	// }
+
+	@Override
+	public Page<VMeterFreezenData> findAll(VMeterFreezenData record, Pageable pageable) {
+		Specification<VMeterFreezenData> querySpeci = new Specification<VMeterFreezenData>() {
+
+			private static final long serialVersionUID = 4570956525979845216L;
+
+			@Override
+			public Predicate toPredicate(Root<VMeterFreezenData> root, CriteriaQuery<?> query,
+					CriteriaBuilder criteriaBuilder) {
+				if (StringUtils.isEmpty(record.getSearchKey())) {
+					return criteriaBuilder.conjunction();
+				}
+				List<Predicate> predicates = new ArrayList<>();
+				if (!StringUtils.isEmpty(record.getSearchKey())) {
+					predicates.add(criteriaBuilder.like(root.get("imei"), "%" + record.getSearchKey() + "%"));
+				}
+				if (!StringUtils.isEmpty(record.getSearchKey())) {
+					predicates.add(criteriaBuilder.like(root.get("meterNo"), "%" + record.getSearchKey() + "%"));
+				}
+				return criteriaBuilder.or(predicates.toArray(new Predicate[predicates.size()]));
+			}
+
+		};
+		final Page<VMeterFreezenData> list = freezeDataViewRepository.findAll(querySpeci, pageable);
+		list.forEach(e -> {
+			String statusValue = e.getStatusValue();
+			if (null == statusValue) {
+				return;
+			}
+			String[] values = statusValue.split(";");
+			if (values.length < 3) {
+				return;
+			}
+			e.setSnr(values[3]);
+			e.setRsrp(values[2]);
+		});
+		return list;
+	}
+
+	@Override
+	public VMeterFreezenData insert(VMeterFreezenData record) {
+		return null;
+	}
+
+	@Override
+	public void delete(VMeterFreezenData record) {
+	}
+
+	@Override
+	public VMeterFreezenData update(VMeterFreezenData record) {
+		return null;
+	}
+
+}

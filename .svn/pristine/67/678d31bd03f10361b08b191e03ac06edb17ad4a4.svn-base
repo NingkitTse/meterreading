@@ -1,0 +1,21 @@
+package com.wasion.meterreading.orm.jpa;
+
+import java.util.List;
+
+import org.springframework.data.repository.CrudRepository;
+
+import com.wasion.meterreading.entity.RtTaskOnlineV1910;
+
+public interface RtTaskOnlineV1910Repository extends CrudRepository<RtTaskOnlineV1910, String> {
+
+	List<RtTaskOnlineV1910> findBySuccess(Integer success);
+	/**
+	 * 通过WlwCommandId查找命令
+	 * @param cmdId 物联网平台CommandId
+	 * @return 命令对象
+	 * @author w24882 xieningjie
+	 * @date 2019年11月18日
+	 */
+	RtTaskOnlineV1910 findByCommandId(String cmdId);
+	
+}

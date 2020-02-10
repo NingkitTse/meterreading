@@ -1,0 +1,56 @@
+package com.wasion.meterreading.controller;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.alibaba.fastjson.JSON;
+import com.wasion.meterreading.service.impl.telecom.UploadDataServiceImpl;
+
+@RestController
+@RequestMapping(value = "/telecom")
+public class TelecomReceiverController {
+
+	private static Logger LOG = LoggerFactory.getLogger(MobileReceiverController.class);
+
+	@Autowired
+	private UploadDataServiceImpl uploadDataServiceImpl;
+	private static final ExecutorService executorService = Executors.newCachedThreadPool();
+
+	/**
+	 * 电信平台North Application接口
+	 * 样例数据：{"notifyType":"deviceDatasChanged","requestId":null,"deviceId":"ec19305e-e051-4b
+	 * b9-aa67-63932324a01b","gatewayId":"ec19305e-e051-4bb9-aa67-63932324a01b","servic
+	 * es":[{"serviceId":"DailyReport","serviceType":"DailyReport","data":{"meterEleno"
+	 * :"00113005677411","totalconsumepower":4294967295,"maxworkelectricflow":65535,"mi
+	 * nworkelectricflow":65535,"batteryVoltage":"3.44","signalStrength":"-67","SNR":"1
+	 * 8","state":0,"currentReading":400,"dailyActivityTime":34,"Dailyreporttime":"FFFF
+	 * FFFFFF","Dailydata01":4294967295,"Dailydata02":4294967295,"Dailydata03":42949672
+	 * 95,"Dailydata04":400,"Dailydata05":30,"Dailydata06":20,"Dailydata07":4294967295,
+	 * "MonthFreezeData":10},"eventTime":"20191028T030233Z"}]}
+	 * 
+	 * @param requestBody
+	 *            消息体
+	 * @return 成功标识
+	 */
+	@PostMapping("/dataReport")
+	public String receive(@RequestBody String requestBody) {
+		LOG.info("data receive from telcom iot platform:  body String --- {}", requestBody);
+		/************************************************
+		 * 解析数据推送请求，非加密模式。 如果是明文模式使用以下代码
+		 **************************************************/
+		/************* 明文模式 start ****************/
+		executorService.submit(() -> {
+			uploadDataServiceImpl.parseData(JSON.parse(requestBody));
+		});
+		return "ok";
+	}
+
+}

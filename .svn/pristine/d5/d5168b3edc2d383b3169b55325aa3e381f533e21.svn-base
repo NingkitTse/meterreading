@@ -1,0 +1,222 @@
+package cmcciot.onenet.nbapi.sdk.samples;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import cmcciot.onenet.nbapi.sdk.api.online.ReadOpe;
+import cmcciot.onenet.nbapi.sdk.dto.MeterDeviceDto;
+import cmcciot.onenet.nbapi.sdk.entity.GetDeviceByImei;
+import cmcciot.onenet.nbapi.sdk.entity.GetDeviceDataPoints;
+import cmcciot.onenet.nbapi.sdk.entity.Read;
+
+public class MyTest {
+	private static final Logger LOGGER = LoggerFactory.getLogger(MyTest.class);
+	private static SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	private static SimpleDateFormat sdf1 = new SimpleDateFormat("yyyyMMddHHmmss");
+
+	public static void main(String[] args) throws JSONException {
+		String apiKey = "5x5kP0=DWsSwHZCWDwa=iBMBzNk=";
+		String imei = "869975033649065";
+		Integer objId = 3200;
+		Integer objInstId = 0;
+		Integer readResId = 5500;
+		Integer executeResId = 5501;
+		Integer writeResId = 5750;
+		Integer writeMode = 2;
+		// Read
+		ReadOpe readOperation = new ReadOpe(apiKey);
+		Read read = new Read(imei, objId);
+		read.setObjInstId(objInstId);
+		read.setResId(readResId);
+		LOGGER.info(readOperation.operation(read, null).toString());
+
+		Map<String, MeterDeviceDto> imeiMap = new HashMap<>();
+		Map<String, MeterDeviceDto> deviceIdMap = new HashMap<>();
+		List<MeterDeviceDto> meterDeviceList = new ArrayList<>();
+		GetDeviceByImei getDeviceByImei = new GetDeviceByImei(imei);
+		JSONObject deviceRet = readOperation.operation(getDeviceByImei, null);
+		LOGGER.info(deviceRet.toString());
+
+		int errno = deviceRet.getInt("errno");
+		if (0 == errno) {
+			JSONObject data = deviceRet.getJSONObject("data");
+			String id = data.getString("id");
+			MeterDeviceDto meterDevice = new MeterDeviceDto(imei, id);
+			imeiMap.put(imei, meterDevice);
+			deviceIdMap.put(id, meterDevice);
+			meterDeviceList.add(meterDevice);
+		}
+		List<String> deviceIds = meterDeviceList.stream().map(MeterDeviceDto::getDeviceId).collect(Collectors.toList());
+		GetDeviceDataPoints getDeviceDataPoints = new GetDeviceDataPoints(deviceIds);
+
+		JSONObject dataPoints = readOperation.operation(getDeviceDataPoints, null);
+		LOGGER.info(dataPoints.toString());
+		List<MeterDeviceDto> resolveData = resolveData(dataPoints, deviceIdMap);
+		
+		LOGGER.debug("Final value: {}", resolveData);
+	}
+
+	private static List<MeterDeviceDto> resolveData(JSONObject dataPoints, Map<String, MeterDeviceDto> deviceIdMap) throws JSONException {
+		List<MeterDeviceDto> retList = new ArrayList<>();
+		if (null == dataPoints) {
+			return retList;
+		}
+		int errno = dataPoints.getInt("errno");
+		if (errno != 0) {
+			return retList;
+		}
+
+		JSONObject data = dataPoints.getJSONObject("data");
+		JSONArray devices = data.getJSONArray("devices");
+		int deviceLen = devices.length();
+		for (int i = 0; i < deviceLen; ++i) {
+			JSONObject device = devices.getJSONObject(i);
+			JSONArray datastreams = device.getJSONArray("datastreams");
+			String deviceId = device.getString("id");
+			MeterDeviceDto meterDeviceDto = deviceIdMap.get(deviceId);
+			if (null == meterDeviceDto) {
+				LOGGER.warn("Cannot find device::{}", deviceId);
+				continue;
+			}
+			int len = datastreams.length();
+			Date latestDate = null;
+			String latestValue = "";
+			for (int j = 0; j < len; ++j) {
+				JSONObject deviceData = datastreams.getJSONObject(j);
+				try {
+					Date at = sdf.parse(deviceData.getString("at"));
+					String value = deviceData.getString("value");
+					if (null == latestDate || latestDate.before(at)) {// 获取最晚一条数据
+						at = latestDate;
+						latestValue = value;
+					} else {
+						continue;
+					}
+				} catch (JSONException e) {
+					LOGGER.warn("Parse date failed with value {}.", deviceData);
+				} catch (ParseException e) {
+					LOGGER.warn("Parse date failed with value {}.", deviceData);
+				}
+			}
+			try {
+				List<MeterDeviceDto> frameDatumn = parseFrameData(meterDeviceDto, latestValue);
+				retList.addAll(frameDatumn);
+			} catch (ParseException | CloneNotSupportedException e) {
+				LOGGER.warn("Parse frame data failed with value {}.", latestValue);
+			}
+		}
+		return retList;
+	}
+
+	private static List<MeterDeviceDto> parseFrameData(MeterDeviceDto meterDeviceDto, String frameValue)
+			throws ParseException, CloneNotSupportedException {
+		int index = 0;
+		int startChar = hexToInt(frameValue.substring(index, index + 2));
+		index += 2;
+		int meterType = hexToInt(frameValue.substring(index, index + 2));
+		index += 2;
+		String addressDomain = frameValue.substring(index, index + 14);
+		index += 14;
+		String controlCode = frameValue.substring(index, index + 2);
+		index += 2;
+		int dataLen = hexToInt(frameValue.substring(index, index + 2));
+		index += 2;
+
+		String dataStr = frameValue.substring(index, dataLen * 2 + index);
+
+		int index1 = 0;
+		String dataSign = dataStr.substring(index1, index1 + 4);
+		index1 += 4;
+		String seq = dataStr.substring(index1, index1 + 2);
+		index1 += 2;
+		String uploadDataType = dataStr.substring(index1, index1 + 2);
+		index1 += 2;
+		double instantFlux = bcdToDoulbe(dataStr.substring(index1, index1 + 8));
+		index1 += 8;
+		String instantFluxUnit = dataStr.substring(index1, index1 + 2);
+		index1 += 2;
+		String freezeDateStr = bcdToString(dataStr.substring(index1, index1 + 14));
+		Date freezenDate = sdf1.parse(freezeDateStr);
+		index1 += 14;
+		String freezeFluxUnit = dataStr.substring(index1, index1 + 2);
+		index1 += 2;
+		String freezeFluxLen = dataStr.substring(index1, index1 + 2);
+		index1 += 2;
+		List<Double> dataList = new ArrayList<>();
+		Integer len = hexToInt(freezeFluxLen);
+		while (len-- > 0) {
+			String freezeFlux = dataStr.substring(index1, index1 + 8);
+			index1 += 8;
+			dataList.add(bcdToDoulbe(freezeFlux));
+		}
+		String imsi = bcdToString(dataStr.substring(index1, index1 + 16));
+		index1 += 16;
+		Double battery = bcdToDoulbe(dataStr.substring(index1, index1 + 4));
+		index1 += 4;
+		Integer rsrp = hexToInt(dataStr.substring(index1, index1 + 4)); // 信号强度
+		index1 += 4;
+		Integer snrp = hexToInt(dataStr.substring(index1, index1 + 4)); // 信噪比
+		index1 += 4;
+		String totalWorkSecondStr = dataStr.substring(index1, index1 + 8);
+		index1 += 8;
+		String statusWord = dataStr.substring(index1, index1 + 4);
+		index1 += 4;
+
+		meterDeviceDto.setBattery(battery);
+		meterDeviceDto.setStatusWord(statusWord);
+		meterDeviceDto.setSeq(seq);
+		meterDeviceDto.setAddressDomain(addressDomain);
+		meterDeviceDto.setControlCode(controlCode);
+
+		List<MeterDeviceDto> retList = new ArrayList<>();
+		Calendar c = Calendar.getInstance();
+		Date registerDate = new Date();
+		for (Double data : dataList) {
+			MeterDeviceDto meter = (MeterDeviceDto) meterDeviceDto.clone();
+			meter.setFreezenValue(data);
+			meter.setFreezenDate(freezenDate);
+			meter.setRegisterDate(registerDate);
+			c.setTime(freezenDate);
+			c.add(Calendar.DAY_OF_MONTH, 1);
+			freezenDate = c.getTime();
+			retList.add(meter);
+		}
+		return retList;
+	}
+
+	private static Integer hexToInt(String str) {
+		char[] ch = str.toCharArray();
+		String res = "";
+		for (int i = 0; i < ch.length; i += 2) {
+			res += Integer.parseInt("" + ch[i] + ch[i + 1], 16);
+		}
+		return Integer.parseInt(res);
+	}
+
+	private static Double bcdToDoulbe(String str) {
+		return Double.parseDouble(bcdToString(str)) / 100;
+	}
+
+	private static String bcdToString(String str) {
+		char[] ch = str.toCharArray();
+		String res = "";
+		for (int i = ch.length - 2; i >= 0; i -= 2) {
+			res += "" + ch[i] + ch[i + 1];
+		}
+		return res;
+	}
+
+}

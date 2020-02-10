@@ -1,0 +1,80 @@
+package com.wasion.meterreading.domain;
+
+import javax.persistence.Column;
+import javax.persistence.Embeddable;
+
+/**
+ * TRunMeterDocuId entity. @author MyEclipse Persistence Tools
+ */
+@SuppressWarnings("serial")
+@Embeddable
+public class TRunMeterDocuId implements java.io.Serializable {
+
+	// Fields
+
+	private String meterGuid;
+	private String protocolNo;
+
+	// Constructors
+
+	/** default constructor */
+	public TRunMeterDocuId() {
+	}
+
+	/** full constructor */
+	public TRunMeterDocuId(String meterGuid, String protocolNo) {
+		this.meterGuid = meterGuid;
+		this.protocolNo = protocolNo;
+	}
+
+	// Property accessors
+
+	@Column(name = "METER_GUID", nullable = false, length = 40)
+	public String getMeterGuid() {
+		return this.meterGuid;
+	}
+
+	public void setMeterGuid(String meterGuid) {
+		this.meterGuid = meterGuid;
+	}
+
+	@Column(name = "PROTOCOL_NO", nullable = false, length = 12)
+	public String getProtocolNo() {
+		return this.protocolNo;
+	}
+
+	public void setProtocolNo(String protocolNo) {
+		this.protocolNo = protocolNo;
+	}
+
+	public boolean equals(Object other) {
+		if ((this == other))
+			return true;
+		if ((other == null))
+			return false;
+		if (!(other instanceof TRunMeterDocuId))
+			return false;
+		TRunMeterDocuId castOther = (TRunMeterDocuId) other;
+
+		return ((this.getMeterGuid() == castOther.getMeterGuid()) || (this
+				.getMeterGuid() != null && castOther.getMeterGuid() != null && this
+				.getMeterGuid().equals(castOther.getMeterGuid())))
+				&& ((this.getProtocolNo() == castOther.getProtocolNo()) || (this
+						.getProtocolNo() != null
+						&& castOther.getProtocolNo() != null && this
+						.getProtocolNo().equals(castOther.getProtocolNo())));
+	}
+
+	public int hashCode() {
+		int result = 17;
+
+		result = 37 * result
+				+ (getMeterGuid() == null ? 0 : this.getMeterGuid().hashCode());
+		result = 37
+				* result
+				+ (getProtocolNo() == null ? 0 : this.getProtocolNo()
+						.hashCode());
+		return result;
+	}
+
+}

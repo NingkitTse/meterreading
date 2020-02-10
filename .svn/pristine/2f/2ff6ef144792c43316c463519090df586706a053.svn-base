@@ -1,0 +1,27 @@
+10086.iot.apiKey=4DBRwHN2bO=Gg0gnN=R1UC=ZdIs=
+10086.iot.objId=3200
+10086.iot.objInstId=0
+10086.iot.readResId=5500
+
+telecom.iot.manufacturerId=Wasion
+telecom.iot.manufacturerName=Wasion
+telecom.iot.deviceType=WaterMeter
+telecom.iot.model=NbWater_NBIotF
+telecom.iot.protocolType=CoAP
+
+task.iot.upload.recorder.enable=true
+task.iot.command.process.enable=true
+
+spring.profiles.active=pro,resolverCfg
+# meter reading
+server.servlet.context-path=/mr
+
+logging.level.root=INFO
+logging.level.com.wasion.meterreading=INFO
+logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger- %msg%n 
+logging.pattern.file=%d{yyyy-MM-dd-HH:mm} [%thread] %-5level %logger- %msg%n
+logging.file=D:/mrlog/springbootlog.log
+
+spring.jackson.date-format=yyyy-MM-dd HH:mm:ss
+spring.jackson.time-zone=GMT+8
+

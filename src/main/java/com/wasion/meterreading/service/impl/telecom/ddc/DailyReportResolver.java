@@ -1,0 +1,178 @@
+package com.wasion.meterreading.service.impl.telecom.ddc;
+
+import com.wasion.meterreading.domain.dto.ResolveContext;
+import com.wasion.meterreading.domain.dto.telecom.ServiceData;
+import com.wasion.meterreading.domain.dto.telecom.impl.DailyReportData;
+import com.wasion.meterreading.entity.freezedata.DayFreezeDataValue;
+import com.wasion.meterreading.entity.freezedata.FreezeDataId;
+import com.wasion.meterreading.entity.freezedata.FreezeDataValue;
+import com.wasion.meterreading.orm.jpa.freezedata.DayFreezeDataRepository;
+import com.wasion.meterreading.service.impl.telecom.ServiceResolveServerI;
+import com.wasion.meterreading.util.CommonUtil;
+import com.wasion.meterreading.util.ParseUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import javax.transaction.Transactional;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * 日上报数据解析器 Service-DailyReport
+ *
+ * @author w24882
+ * @date 2019年10月28日
+ */
+@Service
+public class DailyReportResolver implements ServiceResolveServerI {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DailyReportResolver.class);
+    @Autowired
+    private DayFreezeDataRepository repo;
+    private SimpleDateFormat sdf = new SimpleDateFormat("yyMMddHHmm");
+
+    @Transactional
+    @Override
+    public void resolveServiceData(ResolveContext context, ServiceData serviceData) {
+        DailyReportData dailyReportData = (DailyReportData) serviceData.getData();
+        DayFreezeDataValue freezeDataValue = new DayFreezeDataValue();
+        freezeDataValue.setSn(CommonUtil.getUuid());
+        String meterEleno = dailyReportData.getMeterEleno();
+        context.setMeterNo(CommonUtil.specifyMeterNo(meterEleno));
+        freezeDataValue.setMeterNo(meterEleno);
+        freezeDataValue.setBattery(Double.parseDouble(dailyReportData.getBatteryVoltage()));
+        freezeDataValue.setRegisterDate(new Date());
+        String snr = dailyReportData.getSnr();
+        String rsrp = dailyReportData.getSignalStrength();
+        freezeDataValue.setSnr(Integer.parseInt(snr));
+        freezeDataValue.setRsrp(Integer.parseInt(rsrp));
+        freezeDataValue.setDeviceId(context.getDeviceId());
+        freezeDataValue.setFreezenValue(dailyReportData.getCurrentReading() / 1000 + "");
+        freezeDataValue.setImei(context.getImei());
+        final Integer state = dailyReportData.getState();
+        resolveStatusWord(freezeDataValue, snr, rsrp, state);
+        FreezeDataId id = new FreezeDataId();
+
+        // 解析时间
+        Date date = null;
+        Calendar calendar = Calendar.getInstance();
+        try {
+            date = sdf.parse(dailyReportData.getDailyReportTime());
+            calendar.setTime(date);
+        } catch (ParseException e) {
+            date = new Date();
+            calendar.setTime(date);
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            date = calendar.getTime();
+            LOG.error("Parse frozen date failed with value {}.", dailyReportData.getDailyReportTime());
+        }
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        date = calendar.getTime();
+        id.setFreezenDate(date);
+        id.setSnMeter(context.getSnMeter());
+        freezeDataValue.setSnDevice(context.getSnDevice());
+        freezeDataValue.setId(id);
+        freezeDataValue.setMeterNo(meterEleno);
+
+        // 解析7天冻结数据
+        List<DayFreezeDataValue> list = new ArrayList<>();
+        list.add(freezeDataValue);
+        for (int i = 1; i <= 7; ++i) {
+            try {
+                Method method = dailyReportData.getClass().getMethod("getDailyData0" + i);
+                Long freezenValue = (Long) method.invoke(dailyReportData);
+                calendar.add(Calendar.DAY_OF_MONTH, -1);
+                Date freezenDate = calendar.getTime();
+                DayFreezeDataValue clone = (DayFreezeDataValue) freezeDataValue.clone();
+                clone.getId().setFreezenDate(freezenDate);
+                clone.setFreezenValue(freezenValue / 1000 + "");
+                list.add(clone);
+            } catch (NoSuchMethodException | SecurityException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                e.printStackTrace();
+            } catch (CloneNotSupportedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // 如果数据库已经存在表计对应日期的冻结数据，或者当前循环变量数据为无效值，则跳过。
+        list = list.stream().filter(e -> {
+            return ParseUtil.isFreezenValueValid(e);
+        }).collect(Collectors.toList());
+        for (DayFreezeDataValue value : list) {
+            final FreezeDataId valueId = value.getId();
+            if (repo.existsById(valueId)) {
+                repo.updateFreezenValueById(valueId.getSnMeter(), valueId.getFreezenDate(), value.getFreezenValue());
+            } else {
+                repo.save(value);
+            }
+            LOG.info("Save telecom daily report data successfully. {}", value);
+        }
+
+        // 放上下文，供查询历史记录命令的方法检索历史记录，并将其保存至命令结果
+        context.put(ResolveContext.DataMapKey.FREEZE_DATA_KEY, list.size() > 0 ? list.get(0) : new ArrayList<DayFreezeDataValue>());
+        context.put(ResolveContext.DataMapKey.FREEZE_DATA_LIST_KEY, list);
+    }
+
+    /**
+     * 对照老代码取值情况，状态值使用到的字段有 第0位的valveFlag 与 第2位的信号强度
+     * 解析后的状态值,用分号隔开；顺序是阀门状态，电池欠压标志，CSQ，走气，过流，远程阀控，磁干扰，远程开关阀，泄漏，厂内状态，失联，持续走气泄漏
+     */
+    private void resolveStatusWord(FreezeDataValue freezeDataValue, String snr, String rsrp, final Integer state) {
+        // 直读模块异常
+        byte directReadModuleExcep = (byte) ((0x8000 & state) >> 15);
+        // 阀门故障
+        byte valveFault = (byte) ((0x4000 & state) >> 14);
+        // 存储故障
+        byte storeFault = (byte) ((0x2000 & state) >> 13);
+        // 拆表警告
+        byte detachMeterWarn = (byte) ((0x1000 & state) >> 12);
+        // 低电量告警
+        byte lowBatteryWarn = (byte) ((0x0800 & state) >> 11);
+        // 电池欠压标志
+        byte batteryUnderVoltageFlag = (byte) ((0x0400 & state) >> 10);
+        // 表计阀门状态标志
+        byte valveFlag = (byte) ((0x0300 & state) >> 8);
+        String valveTempStr = "00" + Integer.toHexString(valveFlag);
+        String valveFlagHex = valveTempStr.substring(valveTempStr.length() - 2);
+        // 掉电标志
+        byte powerDownFlag = (byte) ((0x0010 & state) >> 4);
+        // 磁干扰标志
+        byte magneticInterferenceFlag = (byte) ((0x0008 & state) >> 3);
+        // 强制阀控标志
+        byte forcedValveControlFlag = (byte) ((0x0004 & state) >> 2);
+        // 泄露
+        byte leakage = (byte) ((0x0002 & state) >> 1);
+        // 厂内状态
+        byte inPlantStatus = (byte) (0x0001 & state);
+        String temp = "0000" + Integer.toHexString(state);
+        String statusWord = temp.substring(temp.length() - 4);
+        freezeDataValue.setStatusWord(statusWord);
+        StringBuffer sb = new StringBuffer(valveFlagHex + ";");
+        sb.append(batteryUnderVoltageFlag + ";");
+        sb.append(rsrp + ";");
+        sb.append(snr + ";");
+        sb.append(directReadModuleExcep + ";");
+        sb.append(valveFault + ";");
+        sb.append(storeFault + ";");
+        sb.append(detachMeterWarn + ";");
+        sb.append(lowBatteryWarn + ";");
+        sb.append(powerDownFlag + ";");
+        sb.append(magneticInterferenceFlag + ";");
+        sb.append(forcedValveControlFlag + ";");
+        sb.append(leakage + ";");
+        sb.append(inPlantStatus + ";");
+        freezeDataValue.setStatusValue(sb.toString());
+    }
+
+}

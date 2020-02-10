@@ -1,0 +1,92 @@
+package com.wasion.meterreading.domain;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
+
+/**
+ * 电信平台Service处理配置 配置类
+ * 
+ * @author w24882
+ * @date 2019年11月15日
+ */
+@Entity
+@Table(name = "T_CFG_TELE_SERVICE_CONFIG")
+public class TCfgTeleServiceValue extends BaseValue {
+
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1838574916228388368L;
+	@Id
+	private String sn;
+	private String serviceId;
+	private String serviceType;
+	private String serviceDataClassPath;
+	private String resolverClassPath;
+	private transient Class<?> resolverClass;
+	private transient Class<?> serviceDataClass;
+
+	@Column(name = "SN", length = 40)
+	public String getSn() {
+		return sn;
+	}
+
+	public void setSn(String sn) {
+		this.sn = sn;
+	}
+
+	@Column(name = "SERVICE_ID", length = 40)
+	public String getServiceId() {
+		return serviceId;
+	}
+
+	public void setServiceId(String serviceId) {
+		this.serviceId = serviceId;
+	}
+
+	@Column(name = "SERVICE_TYPE", length = 40)
+	public String getServiceType() {
+		return serviceType;
+	}
+
+	public void setServiceType(String serviceType) {
+		this.serviceType = serviceType;
+	}
+
+	@Column(name = "DATA_CLASS_PATH", length = 255)
+	public String getServiceDataClassPath() {
+		return serviceDataClassPath;
+	}
+
+	public void setServiceDataClassPath(String serviceDataClassPath) {
+		this.serviceDataClassPath = serviceDataClassPath;
+	}
+
+	@Column(name = "RESOLVER_CLASS_PATH", length = 255)
+	public String getResolverClassPath() {
+		return resolverClassPath;
+	}
+
+	public void setResolverClassPath(String resolverClassPath) {
+		this.resolverClassPath = resolverClassPath;
+	}
+
+	public Class<?> getResolverClass() {
+		return resolverClass;
+	}
+
+	public void setResolverClass(Class<?> resolverClass) {
+		this.resolverClass = resolverClass;
+	}
+
+	public Class<?> getServiceDataClass() {
+		return serviceDataClass;
+	}
+
+	public void setServiceDataClass(Class<?> serviceDataClass) {
+		this.serviceDataClass = serviceDataClass;
+	}
+
+}

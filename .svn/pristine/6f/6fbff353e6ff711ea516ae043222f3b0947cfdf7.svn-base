@@ -1,0 +1,9 @@
+package com.wasion.meterreading.orm.jpa;
+
+import org.springframework.data.repository.CrudRepository;
+
+import com.wasion.meterreading.domain.DtWtrMeterInfo;
+
+public interface DtWtrMeterInfoRepository extends CrudRepository<DtWtrMeterInfo, String> {
+
+}

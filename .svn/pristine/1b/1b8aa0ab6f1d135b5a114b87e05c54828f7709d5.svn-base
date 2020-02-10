@@ -1,0 +1,9 @@
+package com.wasion.meterreading.orm.jpa;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.wasion.meterreading.domain.EventReportValue;
+
+public interface EventReportRepository extends JpaRepository<EventReportValue, Long> {
+
+}

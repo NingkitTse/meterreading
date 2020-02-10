@@ -1,0 +1,107 @@
+package com.wasion.meterreading.service.impl.telecom;
+
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.baomidou.mybatisplus.core.toolkit.StringUtils;
+import com.wasion.meterreading.constant.SystemConstant;
+import com.wasion.meterreading.domain.TMeterDevice;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext;
+import com.wasion.meterreading.domain.view.VMeterDevice;
+import com.wasion.meterreading.exception.MRException;
+import com.wasion.meterreading.exception.MRExceptionEnum;
+import com.wasion.meterreading.orm.jpa.TMobileMeterRepository;
+import com.wasion.meterreading.orm.jpa.VMobileMeterRepository;
+import com.wasion.meterreading.service.UploadDataServiceI;
+import com.wasion.meterreading.service.impl.telecom.ddc.DeviceDatasChangedResolver;
+
+import telecom.sdk.service.dataCollection.QuerySpecifyDevice;
+
+/**
+ * 移动上传数据解析实现类
+ * 
+ * @author w24882
+ * @date 2019年10月28日
+ */
+@Service(value = "telecomUploadDataServiceImpl")
+public class UploadDataServiceImpl implements UploadDataServiceI {
+
+	private final static Logger LOG = LoggerFactory.getLogger(DeviceDatasChangedResolver.class);
+	@Autowired
+	private DeviceDatasChangedResolver deviceDatasChangedResolver;
+	@Autowired
+	private VMobileMeterRepository vMobileMeterRepository;
+	@Autowired
+	private TMobileMeterRepository tMobileMeterRepository;
+
+	@Override
+	public void parseData(Object data) {
+		JSONObject requestBody = (JSONObject) data;
+		String notifyType = requestBody.getString("notifyType");
+		LOG.info("Telecom nofify type is {}.", notifyType);
+
+		TelecomContext context = new TelecomContext();
+		context.setNotifyType(notifyType);
+		final String deviceId = requestBody.getString("deviceId");
+		context.setDeviceId(deviceId);
+		VMeterDevice device = getVMeterDevice(context, deviceId);
+		final String imei = device.getImei();
+		context.setImei(imei);
+		context.setImei(device.getImsi());
+		context.setSnMeter(device.getSnMeter());
+		context.setSnDevice(device.getSnDevice());
+		context.setData(requestBody.getJSONArray("services"));
+		switch (notifyType) {
+		case "deviceDatasChanged":
+			deviceDatasChangedResolver.resolve(context);
+			break;
+		default:
+			break;
+		}
+
+		// 如果表号为空，重新保存一次
+		if (!StringUtils.isEmpty(device.getMeterNo())) {
+			return;
+		}
+		Optional<TMeterDevice> tMobileMeterOp = tMobileMeterRepository.findById(imei);
+		if (!tMobileMeterOp.isPresent()) {
+			return;
+		}
+		TMeterDevice tMobileMeter = tMobileMeterOp.get();
+		tMobileMeter.setMeterNo(context.getMeterNo());
+		tMobileMeterRepository.save(tMobileMeter);
+	}
+
+	/**
+	 * 根据设备ID获取视图VMeterDevice
+	 * @param context 上下文
+	 * @param deviceId 设备ID
+	 * @return 设备相关的视图VMeterDevice
+	 */
+	private VMeterDevice getVMeterDevice(TelecomContext context, final String deviceId) {
+		VMeterDevice device = vMobileMeterRepository.findByDeviceId(deviceId);
+		if (null == device) {
+			try {
+				String jsonInfo = QuerySpecifyDevice.querySpecifyDevice(deviceId);
+				JSONObject object = JSON.parseObject(jsonInfo);
+				JSONObject deviceInfo = object.getJSONObject("deviceInfo");
+				String imei = deviceInfo.getString("nodeId");
+				TMeterDevice tMobileMeter = TMeterDevice.of(deviceId, imei, null, SystemConstant.PLATFORM_TELECOM);
+				tMobileMeterRepository.save(tMobileMeter);
+				context.setImei(imei);
+				device = vMobileMeterRepository.findByDeviceId(deviceId);
+			} catch (Exception e) {
+				LOG.error("Get device info from telecom platform failed. {}", e);
+				throw new MRException(MRExceptionEnum.QueryDeviceFailed);
+			}
+		}
+		return device;
+	}
+
+}

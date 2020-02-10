@@ -1,0 +1,175 @@
+package com.wasion.meterreading.service.impl.mobile.ddc;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
+
+import com.wasion.meterreading.domain.FreezeDataId;
+import com.wasion.meterreading.domain.FreezeDataValue;
+import com.wasion.meterreading.domain.dto.ResolveContext;
+import com.wasion.meterreading.orm.jpa.FreezeDataRepository;
+import com.wasion.meterreading.service.impl.mobile.MobileResolveServiceI;
+import com.wasion.meterreading.util.CommonUtil;
+import com.wasion.meterreading.util.ParseUtil;
+
+/**
+ * 冻结数据解析类
+ * 
+ * @author w24882
+ * @date 2019年11月6日
+ */
+@Service
+public class FreezeDataResolver implements MobileResolveServiceI<FreezeDataValue> {
+
+	private static SimpleDateFormat sdf1 = new SimpleDateFormat("yyMMddHHmm");
+	private static final Logger LOG = LoggerFactory.getLogger(FreezeDataResolver.class);
+	@Autowired
+	private FreezeDataRepository freezeDataRepository;
+
+	@SuppressWarnings("unused")
+	@Override
+	public List<FreezeDataValue> resolveDataList(ResolveContext context, String dataStr) {
+		String snMeter = context.getSnMeter();
+		String snDevice = context.getSnDevice();
+		FreezeDataValue freezeDataValue = new FreezeDataValue();
+		freezeDataValue.setSnDevice(snDevice);
+		FreezeDataId freezeDataId = new FreezeDataId();
+		freezeDataId.setSnMeter(snMeter);
+		freezeDataValue.setId(freezeDataId);
+		freezeDataValue.setValidData(true);
+
+		int index1 = 0;
+		String seq = dataStr.substring(index1, index1 + 2);
+		index1 += 2;
+		double instantFlux = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 8)); // 当前累积流量
+		index1 += 8;
+		double monthFreezeData = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 8)); // 月冻结数据
+		index1 += 8;
+
+		String dayFreezeDateStr = ParseUtil.bcdToString(dataStr.substring(index1, index1 + 10)); // 最近一次日冻结数据时间
+		Date dayFreezenDate = null;
+		try {
+			dayFreezenDate = sdf1.parse(dayFreezeDateStr);
+		} catch (ParseException e) {
+			LOG.error("Parse day freezen date failed with value {}.", dayFreezeDateStr);
+			dayFreezenDate = new Date(0);
+		}
+		index1 += 10;
+
+		List<Double> dataList = new ArrayList<>();
+		dataList.add(instantFlux);
+		Integer len = 7;
+		while (len-- > 0) {
+			String freezeFlux = dataStr.substring(index1, index1 + 8);
+			index1 += 8;
+			if ("FFFFFFFF".equals(freezeFlux)) {
+				continue;
+			}
+			// 冻结数据暂不使用
+			// dataList.add(ParseUtil.hexToDoulbe(freezeFlux));
+		}
+		Double battery = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 4));
+		index1 += 4;
+		Integer rsrp = ParseUtil.bcdToSignedInt(dataStr.substring(index1, index1 + 4)); // 信号强度
+		index1 += 4;
+		Integer snr = ParseUtil.bcdToSignedInt(dataStr.substring(index1, index1 + 4)); // 信噪比
+		index1 += 4;
+		Integer lastPowerOnTime = ParseUtil.hexToInt(dataStr.substring(index1, index1 + 2)); // 上一次NB模块上电时间
+		index1 += 2;
+		double totalUsedBattery = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 8)); // 电池总用电量
+		index1 += 8;
+		double maxCurrent = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 4)); // 最大电流
+		index1 += 4;
+		double minCurrent = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 4)); // 最大电流
+		index1 += 4;
+		String statusWord = dataStr.substring(index1, index1 + 4);
+		index1 += 4;
+
+		freezeDataValue.setRsrp(rsrp);
+		freezeDataValue.setSnr(snr);
+		freezeDataValue.setStatusValue(snr + ";" + rsrp);
+		freezeDataValue.setBattery(battery);
+		freezeDataValue.setStatusWord(statusWord);
+		resolveStatusWord(freezeDataValue, snr, rsrp, statusWord);
+		freezeDataValue.setSeq(seq);
+
+		Date registerDate = new Date();
+		freezeDataValue.setRegisterDate(registerDate);
+
+		List<FreezeDataValue> retList = new ArrayList<>();
+		Calendar c = Calendar.getInstance();
+
+		for (Double data : dataList) {
+			FreezeDataValue meter = null;
+			try {
+				meter = (FreezeDataValue) freezeDataValue.clone();
+			} catch (CloneNotSupportedException e) {
+				LOG.error("Clone freezeDataValue failed.");
+			}
+			meter.setSn(CommonUtil.getUuid());
+			meter.setFreezenValue(data);
+
+			FreezeDataId id = meter.getId();
+			id.setFreezenDate(dayFreezenDate);
+
+			c.setTime(dayFreezenDate);
+			c.add(Calendar.DAY_OF_MONTH, -1);
+			dayFreezenDate = c.getTime();
+			retList.add(meter);
+		}
+		freezeDataRepository.saveAll(retList);
+		LOG.info("Save freezen date succeed: {}.", retList);
+		return retList;
+	}
+
+	/**
+	 * 对照老代码取值情况，状态值使用到的字段有 第0位的valveFlag 与 第2位的信号强度
+	 * 解析后的状态值,用分号隔开；顺序是阀门状态，电池欠压标志，CSQ，走气，过流，远程阀控，磁干扰，远程开关阀，泄漏，厂内状态，失联，持续走气泄漏
+	 */
+	@SuppressWarnings("unused")
+	private void resolveStatusWord(FreezeDataValue freezeDataValue, Integer snr, Integer rsrp, String statusWord) {
+		Integer state = ParseUtil.hexToInt(statusWord);
+		// 表计阀门状态标志
+		byte valveFlag = (byte) ((0x0300 & state) >> 8);
+		String valveTempStr = "00" + Integer.toHexString(valveFlag);
+		String valveFlagHex = valveTempStr.substring(valveTempStr.length() - 2);
+		// M天不走气
+		byte mDayNoGas = (byte) ((0x0080 & state) >> 7);
+		// 过流
+		byte flowOut = (byte) ((0x0040 & state) >> 6);
+		// 强制阀控标志
+		byte forcedValveControlFlag = (byte) ((0x0020 & state) >> 5);
+		// 磁干扰标志
+		byte magneticInterferenceFlag = (byte) ((0x0008 & state) >> 3);
+		// 远程阀控标志
+		byte remoteValveControlFlag = (byte) ((0x0004 & state) >> 2);
+		// 泄露
+		byte leakage = (byte) ((0x0002 & state) >> 1);
+		// 厂内状态
+		byte inPlantStatus = (byte) (0x0001 & state);
+		StringBuffer sb = new StringBuffer(valveFlagHex + ";");
+		sb.append(0 + ";");
+		sb.append(rsrp + ";");
+		sb.append(snr + ";");
+		freezeDataValue.setStatusValue(sb.toString());
+	}
+
+	@Override
+	public FreezeDataValue resolveData(ResolveContext context, String frameValue) {
+		List<FreezeDataValue> resolveDataList = resolveDataList(context, frameValue);
+		if (CollectionUtils.isEmpty(resolveDataList)) {
+			return null;
+		}
+		return resolveDataList.get(0);
+	}
+
+}

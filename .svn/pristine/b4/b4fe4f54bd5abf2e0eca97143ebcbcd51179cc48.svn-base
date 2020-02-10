@@ -1,0 +1,16 @@
+package com.wasion.meterreading.service.impl.telecom;
+
+import com.wasion.meterreading.domain.dto.ResolveContext;
+import com.wasion.meterreading.domain.dto.telecom.ServiceData;
+
+/**
+ * 电信 数据上报 Service 解析器
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年11月18日
+ */
+public interface ServiceResolveServerI {
+
+	void resolveServiceData(ResolveContext context, ServiceData serviceData);
+
+}

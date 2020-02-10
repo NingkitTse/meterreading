@@ -1,0 +1,264 @@
+package com.wasion.meterreading.service.impl.mobile;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.wasion.meterreading.constant.UploadDataConstant;
+import com.wasion.meterreading.domain.EventReportValue;
+import com.wasion.meterreading.domain.FreezeDataValue;
+import com.wasion.meterreading.domain.TMeterDevice;
+import com.wasion.meterreading.domain.UploadData;
+import com.wasion.meterreading.domain.view.VMeterDevice;
+import com.wasion.meterreading.orm.jpa.EventReportRepository;
+import com.wasion.meterreading.orm.jpa.FreezeDataRepository;
+import com.wasion.meterreading.orm.jpa.TMobileMeterRepository;
+import com.wasion.meterreading.orm.jpa.VMobileMeterRepository;
+import com.wasion.meterreading.service.UploadDataServiceI;
+import com.wasion.meterreading.util.CommonUtil;
+import com.wasion.meterreading.util.ContextProvider;
+import com.wasion.meterreading.util.ParseUtil;
+
+/**
+ * 同步移动水表数据服务类
+ * 
+ * 思维导图：F:\WORK\谢宁杰\xmind\获取移动IOT平台抄表数据.xmind
+ * 
+ * @author w24882
+ * @date 2019年10月8日
+ */
+@Service(value = "mobileUploadDataServiceImpl")
+public class UploadDataServiceImpl implements UploadDataServiceI {
+
+	private static final Logger LOG = LoggerFactory.getLogger(UploadDataServiceImpl.class);
+	private static final ExecutorService service = Executors.newFixedThreadPool(10);
+	private static final String DATA_REPORT = "F100";
+	private static final String EVENT_REPORT = "F400";
+	@Autowired
+	private EventReportRepository eventReportRepository;
+	@Autowired
+	private FreezeDataRepository freezeDataRepository;
+	@Autowired
+	private VMobileMeterRepository vMeterRepository;
+	@Autowired
+	private TMobileMeterRepository tMeterRepository;
+
+	@Transactional
+	@Override
+	public void parseData(Object value) {
+		try {
+			List<UploadData> dataList = new ArrayList<>();
+			if (value instanceof JSONObject) {
+				dataList = this.parseData((JSONObject) value);
+			} else {
+				dataList = this.parseDataArray((JSONArray) value);
+			}
+			if (CollectionUtils.isEmpty(dataList)) {
+				LOG.info("No data point found.");
+				return;
+			}
+			saveUploadData(dataList);
+		} catch (Exception e) {
+			LOG.error("Parse data failed,", e);
+		}
+	}
+
+	/**
+	 * <h1>测试库入库方法</h1>
+	 * <p>
+	 * 车间为了生产测试方便，可能会通过其他系统注册设备到移动OneNET平台，然后再上报数据到此应用中来。
+	 * 移动平台的上传数据我们能够用来标识水表的只有平台的唯一标识码DeviceId，与我们的上报数据MeterNo
+	 * 但是我们无法从平台提供的设备信息中获取MeterNo
+	 * </p>
+	 * 
+	 * @param dataList
+	 */
+	private void saveUploadData(List<UploadData> dataList) {
+		Map<String, UploadData> deivceIdUploadDataMap = dataList.stream()
+				.collect(Collectors.toMap(UploadData::getDeviceId, e -> e));
+		Set<String> deviceIds = deivceIdUploadDataMap.keySet();
+		checkDevices(deviceIds);
+		List<VMeterDevice> meters = vMeterRepository.getByDeviceIds(deviceIds);
+		// 移动平台注册设备时没有meterNo，只有在上报数据时才知道
+		List<TMeterDevice> meters4Save = new ArrayList<>();
+		// 构造DeviceId -> VMobileMeter的map, 并生成TMobileMeter对象，用于更新数据库中的MeterNo
+		Map<String, VMeterDevice> meterDeviceIdMap = meters.stream()
+				.collect(Collectors.toMap(VMeterDevice::getDeviceId, e -> {
+					final TMeterDevice meter = TMeterDevice.of(e.getDeviceId(), e.getImei(), e.getImsi());
+					meter.setMeterNo(deivceIdUploadDataMap.get(meter.getDeviceId()).getMeterNo());
+					meters4Save.add(meter);
+					return e;
+				}));
+
+		List<EventReportValue> eventReportList = new ArrayList<>();
+		List<FreezeDataValue> dataReportList = new ArrayList<>();
+		for (UploadData e : dataList) {
+			VMeterDevice mobileMeter = meterDeviceIdMap.get(e.getDeviceId());
+			if (null == mobileMeter) {
+				LOG.warn("Cannot find mobile meter by deviceId<{}>.", e.getDeviceId());
+				continue;
+			}
+			String snMeter = mobileMeter.getSnMeter();
+			if (e instanceof EventReportValue) {
+				final EventReportValue eventValue = (EventReportValue) e;
+				eventValue.getId().setSnMeter(snMeter);
+				eventReportList.add(eventValue);
+			} else if (e instanceof FreezeDataValue) {
+				final FreezeDataValue dataValue = (FreezeDataValue) e;
+				dataValue.getId().setSnMeter(snMeter);
+				dataValue.setValidData(true);
+				dataValue.setSn(CommonUtil.getUuid());
+				dataReportList.add(dataValue);
+			} else {
+				// nothing
+			}
+		}
+
+		eventReportRepository.saveAll(eventReportList);
+		freezeDataRepository.saveAll(dataReportList);
+		tMeterRepository.saveAll(meters4Save);
+		LOG.info("Save upload data success. Record -> {}", dataList);
+	}
+
+	/**
+	 * 检查上报数据的设备是否存在
+	 * 
+	 * @param deviceIds
+	 *            设备ID列表
+	 */
+	private void checkDevices(Set<String> deviceIds) {
+		Set<String> notExistDevices = new HashSet<>();
+		for (String deviceId : deviceIds) {
+			boolean exist = vMeterRepository.existsByDeviceId(deviceId);
+			if (!exist) {
+				notExistDevices.add(deviceId);
+			}
+		}
+		MeterServiceImpl meterServiceImpl = ContextProvider.getContext().getBean(MeterServiceImpl.class);
+		meterServiceImpl.queryVMobileMeterFromIot(notExistDevices);
+	}
+
+	private List<UploadData> parseData(JSONObject data) {
+		List<UploadData> retList = new ArrayList<>();
+		try {
+			int type = data.getInt("type");
+			if (type != 1) {
+				LOG.warn("Not upload data. Exit.");
+				return retList;
+			}
+			Map<String, Object> baseData = parseBaseData(data);
+			retList.addAll(parseServiceData(baseData));
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+		return retList;
+	}
+
+	private Map<String, Object> parseBaseData(JSONObject data) throws JSONException {
+		Map<String, Object> hashMap = new HashMap<>();
+		hashMap.put(UploadDataConstant.DEVICE_ID_KEY, data.getInt("dev_id") + "");
+		hashMap.put("dsId", data.getString("ds_id"));
+		hashMap.put(UploadDataConstant.REGISTER_DATE_KEY, new Date(data.getLong("at")));
+		String frameValue = data.getString("value");
+		hashMap.put("frameValue", frameValue);
+
+		int index = 0;
+		int startChar = ParseUtil.hexToInt(frameValue.substring(index, index + 2));
+		index += 2;
+		int meterType = ParseUtil.hexToInt(frameValue.substring(index, index + 2));
+		index += 2;
+		String addressDomain = ParseUtil.bcdToString(frameValue.substring(index, index + 14));
+		index += 14;
+		String controlCode = frameValue.substring(index, index + 2);
+		index += 2;
+
+		int dataLen = ParseUtil.hexToInt(frameValue.substring(index, index + 2));
+		index += 2;
+		String dataSign = ParseUtil.bcdToString(frameValue.substring(index, index + 4));
+		index += 4;
+		String dataStr = frameValue.substring(index, dataLen * 2 + index);
+		hashMap.put(UploadDataConstant.START_CHAR_KEY, startChar);
+		hashMap.put(UploadDataConstant.METER_TYPE_KEY, meterType);
+		hashMap.put(UploadDataConstant.METER_NO_KEY, CommonUtil.specifyMeterNo(addressDomain));
+		hashMap.put(UploadDataConstant.CONTROL_CODE_KEY, controlCode);
+		hashMap.put("dataLen", dataLen);
+		hashMap.put(UploadDataConstant.DATA_SIGN_KEY, dataSign);
+		hashMap.put(UploadDataConstant.DATA_STR_KEY, dataStr);
+		return hashMap;
+	}
+
+	public List<UploadData> parseDataArray(JSONArray arr) {
+		int len = arr.length();
+		CountDownLatch countDownLatch = new CountDownLatch(len);
+		List<UploadData> dataList = new ArrayList<>();
+		for (int i = 0; i < len; ++i) {
+			int index = i;
+			service.submit(() -> {
+				try {
+					List<UploadData> parseData = parseData(arr.getJSONObject(index));
+					dataList.addAll(parseData);
+				} catch (JSONException e) {
+					e.printStackTrace();
+				} finally {
+					countDownLatch.countDown();
+				}
+			});
+		}
+		try {
+			countDownLatch.await();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		return dataList;
+	}
+
+	private static List<UploadData> parseServiceData(Map<String, Object> dataMap) {
+		List<UploadData> retList = new ArrayList<>();
+
+		ApplicationContext context = ContextProvider.getContext();
+		String dataSign = (String) dataMap.get(UploadDataConstant.DATA_SIGN_KEY);
+		String dataStr = (String) dataMap.get(UploadDataConstant.DATA_STR_KEY);
+
+		switch (dataSign.toUpperCase()) {
+		case DATA_REPORT: // 数据上报
+			LOG.debug("Service data type is data report.");
+			FreezeDataResolver bean = context.getBean(FreezeDataResolver.class);
+			retList.addAll(bean.resolveDataList(dataMap, dataStr));
+			break;
+		case EVENT_REPORT: // 事件上报
+			LOG.debug("Service data type is event report.");
+			EventReportResolver bean2 = context.getBean(EventReportResolver.class);
+			retList.add(bean2.resolveData(dataMap, dataStr));
+			break;
+		default:
+			break;
+		}
+
+		// 设置公共数据
+		retList.forEach(uploadDate -> {
+			uploadDate.setDeviceId((String) dataMap.get(UploadDataConstant.DEVICE_ID_KEY));
+			uploadDate.setMeterNo((String) dataMap.get(UploadDataConstant.METER_NO_KEY));
+		});
+		return retList;
+	}
+
+}

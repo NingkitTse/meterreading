@@ -1,0 +1,29 @@
+package com.wasion.meterreading.service.impl.mobile.cr;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.domain.dto.ResolveContext;
+import com.wasion.meterreading.domain.dto.ResolveContext.DataMapKey;
+import com.wasion.meterreading.service.NotifyResolveServiceI;
+
+/**
+ * 移动命令答复解析器
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年11月21日
+ */
+@Service
+public class MCommandRspResolver implements NotifyResolveServiceI {
+	private static final Logger LOG = LoggerFactory.getLogger(MCommandRspResolver.class);
+
+	@Override
+	public void resolve(ResolveContext context) {
+		Object data = context.getData();
+		// TODO 解析命令答复
+		LOG.info("Received command response from mobile iot platform. FrameValue: {}.",
+				context.get(DataMapKey.FRAME_VALUE_KEY));
+	}
+
+}

@@ -1,0 +1,45 @@
+package com.wasion.meterreading.service.impl.telecom;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.alibaba.fastjson.JSONObject;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext;
+import com.wasion.meterreading.service.NotifyResolveServiceI;
+import com.wasion.meterreading.service.UploadDataServiceI;
+import com.wasion.meterreading.service.impl.cache.ResolverConfigCacheService;
+
+/**
+ * 移动上传数据解析实现类<br>
+ * 层级关系： 上报数据：【notifyType：【{serviceType， serviceData}】】
+ * 
+ * @author w24882
+ * @date 2019年10月28日
+ */
+@Service(value = "telecomUploadDataServiceImpl")
+public class UploadDataServiceImpl implements UploadDataServiceI {
+
+	private final static Logger LOG = LoggerFactory.getLogger(UploadDataServiceImpl.class);
+	@Autowired
+	ResolverConfigCacheService resolverConfigCache;
+
+	@Override
+	public void parseData(Object data) {
+		JSONObject requestBody = (JSONObject) data;
+		String notifyType = requestBody.getString("notifyType");
+		LOG.info("Telecom nofify type is {}.", notifyType);
+
+		TelecomContext context = new TelecomContext();
+		context.setData(requestBody);
+
+		try {
+			NotifyResolveServiceI resolver = resolverConfigCache.getResolver(notifyType, NotifyResolveServiceI.class);
+			resolver.resolve(context);
+		} catch (Exception e) {
+			LOG.error("Parse upload data failed,", e);
+		}
+	}
+
+}

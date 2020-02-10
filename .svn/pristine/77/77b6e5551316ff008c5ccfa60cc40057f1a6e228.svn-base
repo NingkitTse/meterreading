@@ -1,0 +1,112 @@
+package com.wasion.meterreading.service.impl.telecom.cr;
+
+import java.io.IOException;
+import java.util.Date;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.alibaba.fastjson.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wasion.meterreading.domain.RtTaskOnlineV1910;
+import com.wasion.meterreading.domain.TCfgProtocolCmdParam;
+import com.wasion.meterreading.domain.TCfgTeleServiceValue;
+import com.wasion.meterreading.domain.dto.telecom.ServiceData;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext.DataMapKey;
+import com.wasion.meterreading.exception.MRException;
+import com.wasion.meterreading.exception.MRExceptionEnum;
+import com.wasion.meterreading.orm.jpa.RtTaskOnlineV1910Repository;
+import com.wasion.meterreading.orm.jpa.TCfgProtocolCmdParamRepository;
+import com.wasion.meterreading.service.TelecomNotifyResolveServiceI;
+import com.wasion.meterreading.service.impl.cache.TeleServiceConfigCacheService;
+import com.wasion.meterreading.service.impl.telecom.CommandServiceResolverI;
+import com.wasion.meterreading.util.ContextProvider;
+
+/**
+ * NotifyType：命令响应——解析器
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年11月18日
+ */
+@Service
+public class CommandRspResolver implements TelecomNotifyResolveServiceI {
+
+	private static final Logger LOG = LoggerFactory.getLogger(CommandRspResolver.class);
+	@Autowired
+	private TeleServiceConfigCacheService serviceCfgCache;
+	@Autowired
+	private RtTaskOnlineV1910Repository taskRepo;
+	@Autowired
+	private TCfgProtocolCmdParamRepository cmdParamRepo;
+
+	/**
+	 * {"notifyType":"commandRsp","header":{"serviceType":"MUTE_COMMANDS","requestId":"6c3c60f0-f1cb-d23f-bbf7-46152a726aea_9362","from":"xxx","to":"xxx","deviceId":"xxx"},"body":{"xxx":"xxx"}}
+	 */
+	@Override
+	public void resolve(TelecomContext context) {
+		JSONObject requestBody = (JSONObject) context.getData();
+
+		JSONObject header = requestBody.getJSONObject("header");
+		String serviceType = header.getString("serviceType");
+		String serviceId = header.getString("serviceId");
+		String wlwCommandId = header.getString("requestId");
+		RtTaskOnlineV1910 task = taskRepo.findByCommandId(wlwCommandId);
+		if (null == task) {
+			LOG.warn("Command<{}> is not exist.", wlwCommandId);
+			throw new MRException(MRExceptionEnum.CommnadTaskNotExsit);
+		}
+
+		ObjectMapper objectMapper = new ObjectMapper();
+		ServiceData serviceData = new ServiceData();
+		serviceData.setServiceId(serviceId);
+		serviceData.setServiceType(serviceType);
+		serviceData.setEventTime(new Date());
+
+		String body = requestBody.getString("body");
+		TCfgTeleServiceValue serviceConfig = serviceCfgCache.getValue(serviceId);
+		Class<?> resolverClass = null;
+		Class<?> serviceDataClass = null;
+		if (null == serviceConfig) {
+			LOG.warn("ServiceId<{}>'s config is not exsit.");
+			resolverClass = DefaultCommandRspResolver.class;
+			serviceDataClass = JSONObject.class;
+		} else {
+			resolverClass = serviceConfig.getResolverClass();
+			serviceDataClass = serviceConfig.getServiceDataClass();
+		}
+		LOG.debug("Get service<{}>'s config {}.", serviceId, serviceConfig);
+
+		// 获取服务解析类
+		CommandServiceResolverI resolver = null;
+		Object classInstance = ContextProvider.getBean(resolverClass);
+		if (!(classInstance instanceof CommandServiceResolverI)) {
+			LOG.error("ServiceId<{}>'s config resolver is not a CommandServiceResolverI instance.");
+			throw new MRException(MRExceptionEnum.SystemConfigurationException);
+		} else {
+			resolver = (CommandServiceResolverI) classInstance;
+		}
+
+		// 获取服务数据
+		try {
+			serviceData.setData(objectMapper.readValue(body, serviceDataClass));
+		} catch (IOException e) {
+			LOG.error("Parse service data failed for invalid data format.");
+			throw new MRException(MRExceptionEnum.SystemConfigurationException);
+		}
+
+		LOG.debug("Resolve service<{}>'s data.", serviceId);
+		resolver.resolveServiceData(context, serviceData);
+
+		LOG.debug("Callback loacl task with wlw command id: ({}).", wlwCommandId);
+		List<TCfgProtocolCmdParam> params = cmdParamRepo.findByCmdIdOrderByParamNo(task.getSnProtocolCommand());
+		context.put(DataMapKey.DATA_COMMAND_PARAMS_KEY, params);
+		resolver.callbackLocalTask(context, serviceData, task);
+		taskRepo.save(task);
+		LOG.info("Resolve service<{}>'s data succeed.", serviceId);
+	}
+
+}

@@ -1,0 +1,49 @@
+package com.wasion.meterreading.util;
+
+public class ParseUtil {
+	public static Integer hexToInt(String str) {
+		char[] ch = str.toCharArray();
+		String res = "";
+		for (int i = 0; i < ch.length; i += 2) {
+			res += Integer.parseInt("" + ch[i] + ch[i + 1], 16);
+		}
+		return Integer.parseInt(res);
+	}
+
+	/**
+	 * 将长度为4的Bcd 转换为带符号的数字，第一位为符号位
+	 * 
+	 * @param str
+	 * @return
+	 */
+	public static Integer bcdToSignedInt(String str) {
+		if (str.length() != 4) {
+			return hexToInt(str);
+		}
+		String str1 = bcdToString(str);
+		int value = Integer.parseInt(str1, 16);
+		int sign = value >> 15;
+		if (sign == 1) { // 负数 取非符号位的补码+1作为值
+			return -((~(value & 0x7fff) & 0x7fff) + 1);
+		} else {
+			return value;
+		}
+	}
+
+	public static Double hexToDoulbe(String str) {
+		return Long.parseLong(bcdToString(str), 16) / 1000.0;
+	}
+
+	public static Double bcdToDoulbe(String str) {
+		return Double.parseDouble(bcdToString(str)) / 1000.0;
+	}
+
+	public static String bcdToString(String str) {
+		char[] ch = str.toCharArray();
+		String res = "";
+		for (int i = ch.length - 2; i >= 0; i -= 2) {
+			res += "" + ch[i] + ch[i + 1];
+		}
+		return res;
+	}
+}

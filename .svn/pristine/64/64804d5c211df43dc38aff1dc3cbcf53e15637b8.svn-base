@@ -1,0 +1,48 @@
+package com.wasion.meterreading.service.impl.telecom.ddc;
+
+import java.util.Date;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.domain.dto.ResolveContext;
+import com.wasion.meterreading.domain.dto.telecom.ServiceData;
+import com.wasion.meterreading.domain.dto.telecom.impl.MeterInfoData;
+import com.wasion.meterreading.entity.DtWtrMeterInfo;
+import com.wasion.meterreading.orm.jpa.DtWtrMeterInfoRepository;
+import com.wasion.meterreading.service.impl.telecom.ServiceResolveServerI;
+import com.wasion.meterreading.util.CommonUtil;
+
+/**
+ * Service-Meter Info 解析器
+ * 
+ * @author w24882
+ * @date 2019年11月15日
+ */
+@Service
+public class MeterInfoResolver implements ServiceResolveServerI {
+
+	@Autowired
+	private DtWtrMeterInfoRepository repo;
+
+	@Override
+	public void resolveServiceData(ResolveContext context, ServiceData serviceData) {
+		MeterInfoData data = (MeterInfoData) serviceData.getData();
+
+		String meterNo = data.getMeterEleno();
+		DtWtrMeterInfo dtWtrMeterInfo = new DtWtrMeterInfo();
+		dtWtrMeterInfo.setSnMeter(context.getSnMeter());
+		dtWtrMeterInfo.setSnDevice(context.getSnDevice());
+		dtWtrMeterInfo.setIccid(data.getIccid());
+		dtWtrMeterInfo.setImei(data.getImei());
+		dtWtrMeterInfo.setImsi(data.getImsi());
+		dtWtrMeterInfo.setMeterNo(meterNo);
+		dtWtrMeterInfo.setRegisterDate(new Date());
+		dtWtrMeterInfo.setHardwareVer(data.getHardwareVer());
+		dtWtrMeterInfo.setSoftwareVer(data.getSoftwareVer());
+		dtWtrMeterInfo.setSn(CommonUtil.getUuid());
+
+		repo.save(dtWtrMeterInfo);
+	}
+
+}

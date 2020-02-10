@@ -1,0 +1,65 @@
+# Resolver配置，放在数据库不直观，直接放配置文件舒服的很
+resolver:
+  config:
+    map:
+      DailyReport:
+        resolverId: DailyReport
+        serviceType: DailyReport
+        resolverClassPath: com.wasion.meterreading.service.impl.telecom.ddc.DailyReportResolver
+        serviceDataClassPath: com.wasion.meterreading.domain.dto.telecom.impl.DailyReportData
+        remark: 电信——日上报服务解析器
+      MeterInfor:
+        resolverId: MeterInfor
+        serviceType: MeterInfor
+        resolverClassPath: com.wasion.meterreading.service.impl.telecom.ddc.MeterInfoResolver
+        serviceDataClassPath: com.wasion.meterreading.domain.dto.telecom.impl.MeterInfoData
+        remark: 电信——MeterInfor服务解析器
+      deviceDataChanged:
+        resolverId: deviceDatasChanged
+        serviceType: deviceDatasChanged
+        resolverClassPath: com.wasion.meterreading.service.impl.telecom.ddc.TelecomDdcResolver
+      deviceDatasChanged:
+        resolverId: deviceDatasChanged
+        serviceType: deviceDatasChanged
+        resolverClassPath: com.wasion.meterreading.service.impl.telecom.ddc.TelecomDdcResolver
+        remark: 电信——设备数据变化通知解析器
+      commandRsp:
+        resolverId: commandRsp
+        serviceType: commandRsp
+        resolverClassPath: com.wasion.meterreading.service.impl.telecom.cr.TeleCommandRspResolver
+        remark: 电信——设备命令响应通知解析器
+      deviceAdd:
+        resolverId: deviceAdd
+        serviceType: deviceAdd
+        resolverClassPath: com.wasion.meterreading.service.impl.telecom.device.DeviceAddedResolver
+        remark: 电信——设备新增通知解析器
+      deviceDeleted:
+        resolverId: deviceDeleted
+        serviceType: deviceDeleted
+        resolverClassPath: com.wasion.meterreading.service.impl.telecom.device.DeviceDeletedResolver
+        remark: 电信——设备删除通知解析器
+      1:
+        resolverId: 1
+        serviceType: deviceDatasChanged
+        resolverClassPath: com.wasion.meterreading.service.impl.mobile.ddc.MobileDdcResolver
+        remark: 移动——设备数据变化通知解析器
+      2:
+        resolverId: 2
+        serviceType: deviceOnOffLine
+        resolverClassPath: com.wasion.meterreading.service.impl.mobile.device.MobileDeviceOnOffLineResolver
+        remark: 移动——设备上下线解析器
+      7:
+        resolverId: 7
+        serviceType: commandRsp
+        resolverClassPath: com.wasion.meterreading.service.impl.mobile.cr.MCommandRspResolver
+        remark: 移动——命令答复解析器
+      F100:
+        resolverId: F100
+        serviceType: DATA_REPORT
+        resolverClassPath: com.wasion.meterreading.service.impl.mobile.ddc.FreezeDataResolver
+        remark: 移动——数据上报
+      F400:
+        resolverId: F400
+        serviceType: EVENT_REPORT
+        resolverClassPath: com.wasion.meterreading.service.impl.mobile.ddc.EventReportResolver
+        remark: 移动——事件上报

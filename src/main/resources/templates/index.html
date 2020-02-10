@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title></title>
+<link rel="stylesheet" href="css/bootstrap.min.css" />
+<link rel="stylesheet" href="css/custom.css" />
+</head>
+
+<body>
+	<div id="app">
+		<div class="row">
+			<div class="col-xs-offset-2 col-xs-8">
+				<div class="page-header">
+					<h2>Demo演示界面</h2>
+				</div>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-xs-2 col-xs-offset-2">
+				<div class="list-group">
+					<!--使用指令v-link进行导航-->
+					<a class="list-group-item" v-link="{ path: '/device'}">设备列表</a> <a
+						class="list-group-item" v-link="{ path: '/freezenData'}">日冻结数据</a>
+					<a class="list-group-item" v-link="{ path: '/upload'}">最近上报数据</a>
+				</div>
+			</div>
+			<div class="col-xs-6">
+				<div class="panel">
+					<div class="panel-body">
+						<!--用于渲染匹配的组件-->
+						<router-view></router-view>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<template id="device">
+	<div>
+		<h1>设备列表</h1>
+		<p>{{msg}}</p>
+
+		<form>
+			<div class="input-group">
+				<!-- Small modal -->
+				<span class="input-group-btn">
+					<button type="button" class="btn btn-primary" data-toggle="modal"
+						data-target=".modal-device">新增设备</button>
+				</span>
+				<!-- 查询 -->
+				<input type="text" class="form-control" placeholder="请输入待查询IMEI"
+					v-model="searchKey" />
+				<!-- 按钮 -->
+				<span class="input-group-btn"> <input class="btn btn-default"
+					type="button" value="查询设备" @click="select()">
+				</span>
+			</div>
+		</form>
+
+
+		<table class="table">
+			<caption>设备详情</caption>
+			<thead>
+				<tr>
+					<th>#</th>
+					<th>IMEI (设备码)</th>
+					<th>IMSI (手机号)</th>
+					<th>Name (设备名称)</th>
+					<th>Platform (归属平台)</th>
+					<th>RegisterDate (站内注册时间)</th>
+					<th>Operation (操作)</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr v-for="(index, device) of devices">
+					<th scope="row">{{ index + 1 }}</th>
+					<td>{{ device.imei }}</td>
+					<td>{{ device.imsi }}</td>
+					<td>{{ device.deviceId }}</td>
+					<td>{{ device.platform | formatPlatform }}</td>
+					<td>{{ device.registerDate | formatTimeToStr }}</td>
+					<td><input class="btn btn-danger" type="button" value="删除设备"
+						@click="remove(device)"></td>
+				</tr>
+			</tbody>
+		</table>
+		<nav aria-label="Page navigation"
+			style="display: flex; justify-content: space-between;">
+			<ul class="pagination">
+				<li><a href="javascript:void(0)" @click="prePage(p)"
+					aria-label="Previous"> <span aria-hidden="true">&laquo;</span>
+				</a></li>
+				<li v-for="p of totalPages"
+					v-show="(p > page - 5) && (p < page + 5)"><a
+					href="javascript:void(0)" @click="toPage(p + 1)">{{ p + 1 }}</a></li>
+				<li><a href="javascript:void(0)" @click="nextPage(p)"
+					aria-label="Next"> <span aria-hidden="true">&raquo;</span>
+				</a></li>
+			</ul>
+			<div class="dropup pagination">
+				<button class="btn btn-default dropdown-toggle" type="button"
+					id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true"
+					aria-expanded="true">
+					{{ size }} <span class="caret"></span>
+				</button>
+				<ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+					<li v-for="size of sizes"><a href="javascript:void(0)"
+						@click="changeSize(size)">{{ size }}</a></li>
+				</ul>
+			</div>
+		</nav>
+	</div>
+
+	<div class="modal fade modal-device" id="addModal" tabindex="-1"
+		role="dialog">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal"
+						aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+					<h4 class="modal-title">新增设备</h4>
+				</div>
+				<div class="modal-body">
+					<form>
+						<div class="form-group">
+							<label for="IMEI">IMEI（设备号）</label>
+							<!--  -->
+							<input type="text" class="form-control" id="IMEI"
+								placeholder="请输入IMEI（设备号）" v-model="operDevice.imei">
+						</div>
+						<div class="form-group">
+							<label for="IMSI">IMSI（手机号）</label>
+							<!--  -->
+							<input type="text" class="form-control" id="IMSI"
+								placeholder="请输入IMSI（手机号）" v-model="operDevice.imsi">
+						</div>
+						<div class="form-group">
+							<label for="PLATFORM">PLATFORM（所属平台）</label>
+							<!--  -->
+							<select type="text" class="form-control" id="PLATFORM"
+								placeholder="请选择平台" v-model="operDevice.platform">
+								<option value="MOBILE">移动</option>
+								<option value="TELECOM">电信</option>
+							</select>
+						</div>
+					</form>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+					<button type="button" class="btn btn-primary"
+						@click="save(operDevice)">新增设备</button>
+				</div>
+			</div>
+			<!-- /.modal-content -->
+		</div>
+		<!-- /.modal-dialog -->
+	</div>
+	<!-- /.modal --> </template>
+
+	<template id="freezenData">
+	<div>
+		<h1>日冻结数据</h1>
+		<p>{{msg}}</p>
+
+		<form>
+			<div class="input-group">
+				<input type="text" class="form-control" placeholder="请输入IMEI或者设备名称"
+					v-model="searchKey" /> <span class="input-group-btn">
+					<button class="btn btn-default" type="button" @click="select()">查询</button>
+				</span>
+			</div>
+		</form>
+		<table class="table">
+			<caption>日冻结数据详情</caption>
+			<thead>
+				<tr>
+					<th>#</th>
+					<th>IMEI (设备码)</th>
+					<th>MeterNo (表号)</th>
+					<th>FreezenValue (表码)</th>
+					<th>RSRP (信号强度)</th>
+					<th>SNR (信噪比)</th>
+					<th>RegisterDate (上报日期)</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr v-for="(index, frozenData) of frozenDatum">
+					<th scope="row">{{ index + 1 }}</th>
+					<td>{{ frozenData.imei }}</td>
+					<td>{{ frozenData.meterNo }}</td>
+					<td>{{ frozenData.freezenValue }}</td>
+					<td>{{ frozenData.rsrp }}dBm</td>
+					<td>{{ frozenData.snr }}</td>
+					<td>{{ frozenData.registerDate | formatTimeToStr}}</td>
+				</tr>
+			</tbody>
+		</table>
+		<nav aria-label="Page navigation"
+			style="display: flex; justify-content: space-between;">
+			<ul class="pagination">
+				<li><a href="javascript:void(0)" @click="prePage(p)"
+					aria-label="Previous"> <span aria-hidden="true">&laquo;</span>
+				</a></li>
+				<li v-for="p of totalPages"
+					v-show="(p > page - 5) && (p < page + 5)"><a
+					href="javascript:void(0)" @click="toPage(p + 1)">{{ p + 1 }}</a></li>
+				<li><a href="javascript:void(0)" @click="nextPage(p)"
+					aria-label="Next"> <span aria-hidden="true">&raquo;</span>
+				</a></li>
+			</ul>
+			<div class="dropup pagination">
+				<button class="btn btn-default dropdown-toggle" type="button"
+					id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true"
+					aria-expanded="true">
+					{{ size }} <span class="caret"></span>
+				</button>
+				<ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+					<li v-for="size of sizes"><a href="javascript:void(0)"
+						@click="changeSize(size)">{{ size }}</a></li>
+				</ul>
+			</div>
+		</nav>
+	</div>
+	</template>
+	<template id="upload">
+	<h1>最近上报数据</h1>
+	<p>{{msg}}</p>
+	<table class="table upload">
+		<caption>最近上报数据</caption>
+		<thead>
+			<tr>
+				<th>#</th>
+				<th>平台</th>
+				<th>上报地址</th>
+				<th>上报时间</th>
+				<th>接收方法</th>
+				<th>操作</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr v-for="(index, data) of uploadList">
+				<th scope="row">{{ index + 1 }}</th>
+				<td>{{ data.platform }}</td>
+				<td>{{ data.remoteAddr }}</td>
+				<td>{{ data.requestDate }}</td>
+				<td>{{ data.requestMethod }}</td>
+				<td>
+					<button @click="viewMsg(data)" type="button"
+						class="btn btn-primary btn-lg view-msg" data-toggle="modal"
+						data-target="#myModal">查看报文</button>
+				</td>
+			</tr>
+		</tbody>
+	</table>
+	<div class="modal fade msg-modal" id="myModal" tabindex="-1"
+		role="dialog">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal"
+						aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+					<h4 class="modal-title">{{ operateData.platform }}-{{
+						operateData.remoteAddr }}请求报文</h4>
+				</div>
+				<div class="modal-body">
+					<pre v-html="formatMsg(operateData.requestBody)">
+						</pre>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+					<!--<button type="button" class="btn btn-primary">Save changes</button>-->
+				</div>
+			</div>
+			<!-- /.modal-content -->
+		</div>
+		<!-- /.modal-dialog -->
+	</div>
+	<!-- /.modal --> </template>
+</body>
+<script src="js/vue.js"></script>
+<script src="js/jquery-3.4.1.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script src="js/vue-router.js"></script>
+<script src="js/date.js"></script>
+<script>
+	/* 创建组件构造器  */
+	var Device = Vue.extend({
+		template : '#device',
+		data : function() {
+			return {
+				msg : '移动IOT平台注册的设备',
+				searchKey: "",
+				page : 0,
+				totalPages : 1,
+				size : 10,
+				sizes : [10, 20, 50, 100],
+				operDevice : {imei: "", imsi: "", platform: "MOBILE"},
+				devices : []
+			}
+		},
+		methods : {
+			select : function() {
+				let imei = this.searchKey || null;
+				$.get({
+					url: `meter/infos?page=${this.page}&size=${this.size}&imei=${imei}`,
+					success: (ret) => {
+						this.devices = ret.content;
+						this.size = ret.size;
+						this.page = ret.number;
+						this.totalPages = ret.totalPages;
+					}
+				})
+			},
+			toPage : function(p) {
+				let index = p - 1;
+				let len = this.totalPages;
+				if (index < 0 || index >= len) {
+					return;
+				}
+				this.page = index;
+				this.select();
+			},
+			prePage : function() {
+				this.toPage(this.page - 1);
+			},
+			nextPage : function(p) {
+				this.toPage(this.page + 1);
+			},
+			changeSize : function(size) {
+				this.size = size;
+				this.select();
+			},
+			postPop : function() {
+				
+			},
+			save : function(meterDevice) {
+				$.post({
+					url: `meter/info`,
+					data: JSON.stringify(meterDevice),
+					contentType: "application/json",
+					success: () => {
+						this.select();
+						$("#addModal").modal('hide');
+					},
+					error: function(ret) {
+						alert(ret.responseJSON.msg);
+					}
+				})
+			},
+			remove : function(record) {
+				$.ajax({
+					url: `meter/info`,
+					method : "delete",
+					data: JSON.stringify(record),
+					contentType: "application/json",
+					success: () => {
+						this.select();
+					},
+					error: function(ret) {
+						alert(ret.responseJSON.msg);
+					}
+				})
+			}
+		},
+		mounted : function() { //这个属性就可以，在里面声明初始化时要调用的方法即可
+		    this.select()
+		},
+		created : function() { //这个属性就可以，在里面声明初始化时要调用的方法即可
+		    this.select()
+		},
+		filters : {
+			formatTimeToStr : function(times, pattern) {
+			    var d = new Date(times).Format("yyyy-MM-dd hh:mm");
+			    if (pattern) {
+			        d = new Date(times).Format(pattern);
+			    }
+			    return d.toLocaleString();
+			},
+			formatPlatform : function(platform) {
+				if ("MOBILE" == platform) {
+					return "移动";
+				} else if ("TELECOM" == platform) {
+					return "电信";
+				} else {
+					return "";
+				}
+			}
+		}
+	});
+	
+	var FreezenData = Vue.extend({
+		template : '#freezenData',
+		data : function() {
+			return {
+				msg: '设备日冻结数据面板',
+				page : 0,
+				totalPages : 1,
+				size : 10,
+				sizes : [10, 20, 50, 100],
+				searchKey : "",
+				frozenDatum : []
+			}
+		},
+		methods : {
+			select : function() {
+				$.get({
+					url: `frozenData/infos?page=${this.page}&size=${this.size}&searchKey=${this.searchKey}`,
+					success: (ret) => {
+						this.frozenDatum = ret.content;
+						this.size = ret.size;
+						this.page = ret.number;
+						this.totalPages = ret.totalPages;
+					}
+				})
+			},
+			toPage : function(p) {
+				let index = p - 1;
+				let len = this.totalPages;
+				if (index < 0 || index >= len) {
+					return;
+				}
+				this.page = index;
+				this.select();
+			},
+			prePage : function() {
+				this.toPage(this.page - 1);
+			},
+			nextPage : function(p) {
+				this.toPage(this.page + 1);
+			},
+			changeSize : function(size) {
+				this.size = size;
+				this.select();
+			},
+		},
+		created : function() { //这个属性就可以，在里面声明初始化时要调用的方法即可
+		    this.select()
+		},
+		filters : {
+			formatTimeToStr : function(times, pattern) {
+			    var d = new Date(times).Format("yyyy-MM-dd hh:mm");
+			    if (pattern) {
+			        d = new Date(times).Format(pattern);
+			    }
+			    return d.toLocaleString();
+			}
+		}
+	});
+
+	var upload = Vue.extend({
+		template : '#upload',
+		data : function() {
+			return {
+				msg: '最近上报数据',
+				operateData: {},
+				uploadList : [],
+			}
+		},
+		methods : {
+			viewMsg(data) {
+				this.operateData = data;
+			},
+			formatMsg(jsonObj) {
+				try {
+					return JSON.stringify(JSON.parse(jsonObj), null, 2);
+				} catch(e) {
+					console.info(e);
+				}
+				return jsonObj;
+			},
+		},
+		created : function() { //这个属性就可以，在里面声明初始化时要调用的方法即可
+			$.get({
+				url: `redis/list?key=lastUploadRecord`,
+				success: (ret) => {
+					this.uploadList = ret;
+				},
+				error: function(ret) {
+                    alert(ret.responseJSON.msg);
+                }
+			})
+		},
+		filters: {
+
+		}
+	});
+
+	/* 创建路由器  */
+	var router = new VueRouter()
+
+	/* 创建路由映射  */
+	router.map({
+		'/device' : {
+			component : Device
+		},
+		'/freezenData' : {
+			component : FreezenData
+		},
+		'/upload' : {
+			component : upload
+		},
+	})
+
+	router.redirect({
+		'/' : '/device'
+	})
+
+	/* 启动路由  */
+	var App = Vue.extend({})
+	router.start(App, '#app')
+</script>
+
+</html>

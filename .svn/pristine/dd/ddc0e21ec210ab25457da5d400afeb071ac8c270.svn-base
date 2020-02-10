@@ -1,0 +1,9 @@
+package com.wasion.meterreading.orm.jpa;
+
+import org.springframework.data.repository.CrudRepository;
+
+import com.wasion.meterreading.domain.TMeterDevice;
+
+public interface TMobileMeterRepository extends CrudRepository<TMeterDevice, String> {
+
+}

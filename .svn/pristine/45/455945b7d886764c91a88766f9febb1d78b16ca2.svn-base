@@ -1,0 +1,15 @@
+package com.wasion.meterreading.service;
+
+/**
+ * 数据上报接口
+ * 
+ * @author w24882
+ * @date 2019年11月6日
+ */
+public interface UploadDataServiceI {
+
+	public void parseData(Object data);
+	
+	public void parseCommandRsp(Object data);
+
+}

@@ -1,0 +1,15 @@
+package com.wasion.meterreading.service;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+public interface CrudServiceI<T> {
+
+	public Page<T> findAll(T record, Pageable page);
+
+	public T insert(T record);
+	
+	public void delete(T record);
+	
+	public T update(T record);
+}

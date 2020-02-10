@@ -1,0 +1,20 @@
+package com.wasion.meterreading.service.impl.mobile;
+
+import java.util.List;
+
+import com.wasion.meterreading.domain.dto.ResolveContext;
+
+/**
+ * 移动 解析服务接口
+ * 
+ * @author w24882
+ * @date 2019年11月6日
+ * @param <T>
+ */
+public interface MobileResolveServiceI<T> {
+
+	public T resolveData(ResolveContext context, String dataStr);
+
+	public List<T> resolveDataList(ResolveContext context, String dataStr);
+
+}

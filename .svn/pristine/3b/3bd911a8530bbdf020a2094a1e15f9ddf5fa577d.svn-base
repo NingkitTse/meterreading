@@ -1,0 +1,10 @@
+package com.wasion.meterreading.service.impl.telecom;
+
+import com.wasion.meterreading.domain.dto.telecom.ServiceData;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext;
+
+public interface ServiceResolveServerI {
+
+	void resolveServiceData(TelecomContext context, ServiceData serviceData);
+
+}

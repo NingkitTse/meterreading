@@ -1,0 +1,88 @@
+package com.wasion.meterreading.aop;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.Signature;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Pointcut;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
+import com.alibaba.fastjson.JSON;
+import com.wasion.meterreading.controller.MobileReceiver;
+import com.wasion.meterreading.controller.TelecomReceiver;
+import com.wasion.meterreading.entity.IotUploadRecord;
+import com.wasion.meterreading.task.IotUploadRecorder;
+import com.wasion.meterreading.util.CommonUtil;
+import com.wasion.meterreading.util.ContextProvider;
+
+/**
+ * IOT 数据接收器 拦截器
+ * 
+ * @author w24882
+ * @date 2019年11月15日
+ */
+@ConditionalOnProperty(name = "task.iot.upload.recorder.enable", havingValue = "true")
+@Aspect
+@Component
+public class IotReceiverIntercepter {
+
+	private static Map<Class<?>, String> platformMap = new HashMap<>();
+	static {
+		platformMap.put(MobileReceiver.class, "Mobile");
+		platformMap.put(TelecomReceiver.class, "Telecom");
+	}
+
+	// execution表达式自行搜索引擎
+	@Pointcut("execution(* com.wasion.meterreading.controller.*Receiver.*(..))")
+	public void pointcut() {
+	}
+
+	@Around("pointcut()")
+	public Object printParam(ProceedingJoinPoint joinPoint) throws Throwable {
+		// 获取请求的方法
+		Signature sig = joinPoint.getSignature();
+		final Class<? extends Object> requestClass = joinPoint.getTarget().getClass();
+		String requestMethod = requestClass.getName() + "." + sig.getName();
+		// 获取请求的参数
+		Object[] args = joinPoint.getArgs();
+
+		String platform = platformMap.get(requestClass);
+		StringBuffer sb = new StringBuffer("[");
+		for (Object arg : args) {
+			if (arg instanceof String) {
+				sb.append(arg.toString() + ",");
+			} else if (!(arg instanceof HttpServletRequest) && !(arg instanceof HttpServletResponse)) {
+				// HTTP REQ RESP 不能在非异步模式序列化
+				sb.append(JSON.toJSONString(arg) + ",");
+			}
+		}
+		String requestMsg = sb.toString();
+		if (requestMsg.endsWith(",")) {
+			requestMsg = requestMsg.substring(0, requestMsg.length() - 1);
+		}
+		requestMsg += "]";
+		HttpServletRequest currentRequest = ContextProvider.getCurrentRequest();
+		String remoteAddr = currentRequest.getRemoteAddr();
+
+		try {
+			return joinPoint.proceed();
+		} finally {
+			IotUploadRecord iotUploadRecord = new IotUploadRecord();
+			iotUploadRecord.setPlatform(platform);
+			iotUploadRecord.setRemoteAddr(remoteAddr);
+			iotUploadRecord.setRequestBody(requestMsg);
+			iotUploadRecord.setRequestMethod(requestMethod);
+			iotUploadRecord.setSn(CommonUtil.getUuid());
+			iotUploadRecord.setRequestDate(new Date());
+			IotUploadRecorder.push(iotUploadRecord);
+		}
+	}
+}

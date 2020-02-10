@@ -1,0 +1,40 @@
+package com.wasion.meterreading.orm.jpa;
+
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.data.domain.Example;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
+
+import com.wasion.meterreading.entity.view.VMeterDevice;
+
+public interface VMeterDeviceRepository extends CrudRepository<VMeterDevice, String> {
+	@Query("select u from #{#entityName} u where u.deviceId in ?1")
+	public List<VMeterDevice> getByDeviceIds(@Param("deviceIds") Set<String> deviceIds);
+
+	@Query("select u from #{#entityName} u where u.imei in ?1")
+	public List<VMeterDevice> getByImeis(@Param("imeis") Set<String> imeis);
+
+	@Query("select u from #{#entityName} u where u.meterNo in ?1")
+	public List<VMeterDevice> getByMeterNos(@Param("meterNos") Set<String> meterNos);
+
+	@Query("select u from #{#entityName} u where u.snMeter in :snMeters")
+	public List<VMeterDevice> getBySnMeters(@Param("snMeters") Set<String> snMeters);
+
+	Page<VMeterDevice> findAll(Example<VMeterDevice> example, Pageable pageable);
+
+	boolean existsByDeviceId(String deviceId);
+
+	VMeterDevice findByDeviceId(String deviceId);
+
+	boolean existsByMeterNo(String meterNo);
+
+	boolean existsByImei(String imei);
+	
+	VMeterDevice findByMeterNo(String meterNo);
+
+}

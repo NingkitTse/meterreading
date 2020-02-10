@@ -1,0 +1,24 @@
+package com.wasion.meterreading.service.impl.telecom.ddc;
+
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.domain.dto.telecom.ServiceData;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext;
+import com.wasion.meterreading.domain.dto.telecom.impl.MeterInfoData;
+import com.wasion.meterreading.service.impl.telecom.ServiceResolveServerI;
+
+/**
+ * Service Meter Info 解析器
+ * 
+ * @author w24882
+ * @date 2019年11月15日
+ */
+@Service
+public class MeterInfoResolver implements ServiceResolveServerI {
+
+	@Override
+	public void resolveServiceData(TelecomContext context, ServiceData serviceData) {
+		MeterInfoData data = (MeterInfoData) serviceData.getData();
+	}
+
+}

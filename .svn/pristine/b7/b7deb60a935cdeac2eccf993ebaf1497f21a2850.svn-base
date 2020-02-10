@@ -1,0 +1,73 @@
+package com.wasion.meterreading.service.impl.ecas;
+
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.constant.EcasConstant;
+import com.wasion.meterreading.entity.TRunMeterDocu;
+import com.wasion.meterreading.entity.TRunMeterDocuId;
+import com.wasion.meterreading.orm.jpa.TRunMeterDocuRepository;
+import com.wasion.meterreading.service.NbEcasDeviceServiceI;
+
+/**
+ * Narrow band Ecas Device Operation Servce implementation<br>
+ * ECAS NB表使用T_METER_DUCU表来存储表计的拓展参数，其中Web界面通过判断表计的DeviceId是否为空来判断表计是否注册。
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年12月18日
+ */
+@Service
+public class NbEcasDeviceServiceImpl implements NbEcasDeviceServiceI {
+
+    private static final Logger LOG = LoggerFactory.getLogger(NbEcasDeviceServiceImpl.class);
+
+    @Autowired
+    private TRunMeterDocuRepository docuRepo;
+
+    @Override
+    public void registerDevice(String imei, String deviceId) {
+        TRunMeterDocuId idCon = new TRunMeterDocuId();
+        idCon.setProtocolNo(EcasConstant.PROTOCOL_NO_IMEI);
+        Optional<TRunMeterDocu> imeiDocu = docuRepo.findByIdAndParamValue(idCon, imei);
+        if (!imeiDocu.isPresent()) {
+            LOG.warn("Cannot find ecas nb device which imei is {}.");
+            return;
+        }
+        TRunMeterDocu tRunMeterDocu = imeiDocu.get();
+        String meterGuid = tRunMeterDocu.getId().getMeterGuid();
+        final TRunMeterDocuId newId = new TRunMeterDocuId();
+        newId.setMeterGuid(meterGuid);
+        newId.setProtocolNo(EcasConstant.PROTOCOL_NO_DEVICE_ID);
+        Optional<TRunMeterDocu> deviceIdDocuOp = docuRepo.findById(newId);
+        if (!deviceIdDocuOp.isPresent()) {
+            LOG.warn("This ecas nb device do not have deviceId document. Device meterGuid is {}.", meterGuid);
+            return;
+        }
+        TRunMeterDocu deviceIdDocu = deviceIdDocuOp.get();
+        deviceIdDocu.setParamValue(deviceId); // key point
+        docuRepo.save(deviceIdDocu);
+        LOG.info("Regist ecas nb device's deviceId succeed. Device meterGuid is {}, deviceId is {}.", meterGuid, deviceId);
+    }
+
+    @Override
+    public void logoutDevice(String deviceId) {
+        TRunMeterDocuId idCon = new TRunMeterDocuId();
+        idCon.setProtocolNo(EcasConstant.PROTOCOL_NO_DEVICE_ID);
+        Optional<TRunMeterDocu> deviceIdDocuOp = docuRepo.findByIdAndParamValue(idCon, deviceId);
+        if (!deviceIdDocuOp.isPresent()) {
+            LOG.warn("Cannot find ecas nb device which imei is {}.");
+            return;
+        }
+        TRunMeterDocu deviceIdDocu = deviceIdDocuOp.get();
+        String originalDeviceId = deviceIdDocu.getParamValue();
+        String meterGuid = deviceIdDocu.getId().getMeterGuid();
+        deviceIdDocu.setParamValue(null); // key point
+        docuRepo.save(deviceIdDocu);
+        LOG.info("Logout ecas nb device succeed. Device meterGuid is {}, original deviceId is {}.", meterGuid, originalDeviceId);
+    }
+
+}

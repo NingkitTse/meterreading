@@ -1,0 +1,13 @@
+package com.wasion.meterreading.orm.jpa;
+
+import java.util.List;
+
+import org.springframework.data.repository.CrudRepository;
+
+import com.wasion.meterreading.domain.RtTaskOnlineV1910;
+
+public interface RtTaskOnlineV1910Repository extends CrudRepository<RtTaskOnlineV1910, String> {
+
+	List<RtTaskOnlineV1910> findBySuccess(Integer success);
+	
+}

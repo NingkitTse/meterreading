@@ -1,0 +1,137 @@
+package com.wasion.meterreading.controller;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.alibaba.fastjson.JSON;
+import com.wasion.meterreading.annotation.IpAccessLimit;
+import com.wasion.meterreading.service.impl.telecom.UploadDataServiceImpl;
+
+import telecom.sdk.utils.Constant;
+
+/**
+ * 电信平台回调接口
+ * 
+ * @author w24882
+ * @date 2019年11月15日
+ */
+@RestController
+@RequestMapping(value = "/telecom")
+@IpAccessLimit(count = 300)
+public class TelecomReceiver {
+
+	private static Logger LOG = LoggerFactory.getLogger(TelecomReceiver.class);
+
+	@Autowired
+	private UploadDataServiceImpl uploadDataServiceImpl;
+	private static final AtomicInteger poolNumber = new AtomicInteger(1);
+	private static final ExecutorService executorService = Executors.newCachedThreadPool(new ThreadFactory() {
+		@Override
+		public Thread newThread(Runnable r) {
+			return new Thread(r, "Telecom-Receiver-" + poolNumber.getAndIncrement() + "-Thread");
+		}
+	});
+
+	/**
+	 * 电信平台North Application接口
+	 * 样例数据：{"notifyType":"deviceDatasChanged","requestId":null,"deviceId":"ec19305e-e051-4b
+	 * b9-aa67-63932324a01b","gatewayId":"ec19305e-e051-4bb9-aa67-63932324a01b","servic
+	 * es":[{"serviceId":"DailyReport","serviceType":"DailyReport","data":{"meterEleno"
+	 * :"00113005677411","totalconsumepower":4294967295,"maxworkelectricflow":65535,"mi
+	 * nworkelectricflow":65535,"batteryVoltage":"3.44","signalStrength":"-67","SNR":"1
+	 * 8","state":0,"currentReading":400,"dailyActivityTime":34,"Dailyreporttime":"FFFF
+	 * FFFFFF","Dailydata01":4294967295,"Dailydata02":4294967295,"Dailydata03":42949672
+	 * 95,"Dailydata04":400,"Dailydata05":30,"Dailydata06":20,"Dailydata07":4294967295,
+	 * "MonthFreezeData":10},"eventTime":"20191028T030233Z"}]}
+	 * 
+	 * @param requestBody
+	 *            消息体
+	 * @return 成功标识
+	 */
+	@PostMapping("/dataReport")
+	@ResponseBody
+	@IpAccessLimit(count = 300)
+	public String receive(@RequestBody String requestBody) {
+		LOG.info("data receive from telcom iot platform:  body String --- {}", requestBody);
+		/************************************************
+		 * 解析数据推送请求，非加密模式。 如果是明文模式使用以下代码
+		 **************************************************/
+		/************* 明文模式 start ****************/
+		executorService.submit(() -> {
+			uploadDataServiceImpl.parseData(JSON.parse(requestBody));
+		});
+		return "ok";
+	}
+
+	/**
+	 * 电信平台命令执行结果上报接口
+	 * 样例数据：{"notifyType":"commandRsp","header":{"serviceType":"MUTE_COMMANDS","requestId":"6c3c60f0-f1cb-d23f-bbf7-46152a726aea_9362","from":"xxx","to":"xxx","deviceId":"xxx"},"body":{"xxx":"xxx"}}
+	 * { "deviceId": "d2187a76-1a6c-404f-b1e7-2fe7a60fa984", "commandId":
+	 * "f67384a07a5b4581a87b9c93f29824a5", "result": { "resultCode":
+	 * "SUCCESSFUL", "resultDetail": { "result": { "result": 1,
+	 * "getdayfreezingstarttimedata": [ "1912040000", 100, "FFFFFFFFFF",
+	 * 4294967295, "FFFFFFFFFF", 4294967295, "FFFFFFFFFF", 4294967295,
+	 * "FFFFFFFFFF", 4294967295, "FFFFFFFFFF", 4294967295, "FFFFFFFFFF",
+	 * 4294967295 ], "getdayfreezingnumber": 7, "meterEleno": "00113037027741" }
+	 * } } }
+	 * 
+	 * 
+	 * @param requestBody
+	 * @return
+	 * @author w24882 xieningjie
+	 * @date 2019年11月18日
+	 */
+	@PostMapping(value = Constant.REPORT_CMD_EXEC_RESULT_CALLBACK_URI)
+	@ResponseBody
+	@IpAccessLimit(count = 300)
+	public String reportCmdExecResult(@RequestBody String requestBody) {
+		LOG.info("Received command execute result from telecom platform: body String --- {}", requestBody);
+		executorService.submit(() -> {
+			uploadDataServiceImpl.parseCommandRsp(JSON.parse(requestBody));
+		});
+		return "ok";
+	}
+
+	/**
+	 * 设备新增回调<br>
+	 * 样例报文：{"notifyType":"deviceAdded","deviceId":"01006f25-ab60-4a7e-8b0a-6dcfa15e43cc","gatewayId":"0010256458","nodeType":"GATEWAY","deviceInfo":{"deviceType":"xxx","supportedSecurity":"xxx","isSecurity":"xxx","swVersion":"xxx","serialNumber":"xxx","manufacturerName":"huawei","signalStrength":"xxx","manufacturerId":"00123158","description":"description","statusDetail":"NOT_ACTIVE","mute":"xxx","protocolType":"xxx","mac":"xxx","hwVersion":"xxx","sigVersion":"xxx","bridgeId":"xxx","name":"huawei","location":"xxx","model":"xxx","fwVersion":"xxx","nodeId":"01006f25-ab60-4a7e-8b0a-6dcfa15e43cc","status":"OFFLINE","batteryLevel":"xxx"}}
+	 * 
+	 * @param requestBody
+	 * @return
+	 * @author w24882 xieningjie
+	 * @date 2019年11月18日
+	 */
+	@PostMapping(value = Constant.DEVICE_ADDED_CALLBACK_URI)
+	@ResponseBody
+	@IpAccessLimit(count = 300)
+	public String addDevice(@RequestBody String requestBody) {
+		LOG.info("Received notify device added from telecom platform: body String --- {}", requestBody);
+		executorService.submit(() -> {
+			uploadDataServiceImpl.parseData(JSON.parse(requestBody));
+		});
+		return "ok";
+	}
+
+	@PostMapping(value = Constant.DEVICE_DELETED_CALLBACK_URI)
+	@ResponseBody
+	@IpAccessLimit(count = 300)
+	public String deleteDevice(@RequestBody String requestBody) {
+		LOG.info("Received notify device deleted from telecom platform: body String --- {}", requestBody);
+		executorService.submit(() -> {
+			uploadDataServiceImpl.parseData(JSON.parse(requestBody));
+		});
+		return "ok";
+	}
+
+}

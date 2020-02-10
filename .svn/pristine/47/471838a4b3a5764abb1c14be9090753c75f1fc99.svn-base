@@ -1,0 +1,31 @@
+package com.wasion.meterreading.task.context;
+
+/**
+ * 命令上下文
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年12月18日
+ */
+public interface CommandContext {
+    
+    String getSnMeter();
+    
+    String getBaseUrl();
+
+    String getSecret();
+
+    String getParameters();
+
+    String getParamJsonStr();
+
+    String getServiceId();
+
+    String getMethod();
+    
+    String getPlatform();
+    
+    String getImei();
+    
+    String getDeviceId();
+    
+}

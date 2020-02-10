@@ -1,0 +1,73 @@
+package com.wasion.meterreading.service.impl.mobile.cr;
+
+import java.util.Date;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.domain.dto.ResolveContext;
+import com.wasion.meterreading.entity.RtTaskOnlineV1910;
+import com.wasion.meterreading.enums.MobileConfirmStatusEnum;
+import com.wasion.meterreading.enums.MobileSendStatusEnum;
+import com.wasion.meterreading.orm.jpa.RtTaskOnlineV1910Repository;
+import com.wasion.meterreading.service.NotifyResolveServiceI;
+
+/**
+ * 移动命令答复解析器
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年11月21日
+ */
+@Service
+public class MCommandRspResolver implements NotifyResolveServiceI {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MCommandRspResolver.class);
+    @Autowired
+    private RtTaskOnlineV1910Repository taskRepo;
+
+    /**
+     * { "send_time": 1576147726223, "imei": "869975037677104", "send_status":
+     * 5, "type": 7, "cmd_type": 1, "cmd_id":
+     * "21d6d4c2-859c-5c71-9aab-8d7408cdc416", "confirm_time": 1576147727134,
+     * "confirm_status": 9, "dev_id": 576096445 }
+     */
+    @Override
+    public void resolve(ResolveContext context) {
+        JSONObject data = (JSONObject) context.getData();
+        LOG.debug("Received command response from mobile iot platform. Upload message: {}.", data);
+        try {
+            long sendTime = data.getLong("send_time");
+            String imei = data.getString("imei");
+            // String cmdType = data.getString("cmd_type");
+            String wlwCmdId = data.getString("cmd_id");
+            int deviceId = data.getInt("dev_id");
+
+            RtTaskOnlineV1910 taskOnlineV1910 = taskRepo.findByCommandId(wlwCmdId);
+            if (null == taskOnlineV1910) {
+                LOG.warn("Not found command, cmdId is {}.", wlwCmdId);
+            }
+            MobileConfirmStatusEnum confirmStatus = null;
+            if (data.has("confirm_status")) {
+                int confirmStatusCode = data.getInt("confirm_status");
+                confirmStatus = MobileConfirmStatusEnum.of(confirmStatusCode);
+                taskOnlineV1910.setRemark(confirmStatus.getName());
+            }
+            MobileSendStatusEnum sendStatus = null;
+            if (data.has("send_status")) {
+                int sendStatusCode = data.getInt("send_status");
+                sendStatus = MobileSendStatusEnum.of(sendStatusCode);
+                taskOnlineV1910.setWlwCmdStatus(sendStatus.getName());
+            }
+
+            taskRepo.save(taskOnlineV1910);
+            LOG.info("Command<{}> send at {} of device<{}, {}> responsed, sendStatus is {}, confirmStatus is {}", wlwCmdId, new Date(sendTime), deviceId, imei, sendStatus, confirmStatus);
+        } catch (JSONException e) {
+            LOG.error("Resolve command response failed.", e);
+        }
+    }
+
+}

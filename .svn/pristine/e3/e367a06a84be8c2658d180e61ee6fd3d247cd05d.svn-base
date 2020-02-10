@@ -1,0 +1,10 @@
+package com.wasion.meterreading.orm.jpa;
+
+import org.springframework.data.repository.CrudRepository;
+
+import com.wasion.meterreading.entity.TRunMeterDocu;
+import com.wasion.meterreading.entity.TRunMeterDocuId;
+
+public interface TRunMeterDocuRepository extends CrudRepository<TRunMeterDocu, TRunMeterDocuId> {
+
+}

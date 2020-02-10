@@ -1,0 +1,111 @@
+package telecom.sdk.service.commandDelivery;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.http.HttpResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.alibaba.fastjson.JSONObject;
+
+import telecom.sdk.service.BaseApiEntity;
+import telecom.sdk.service.dataCollection.QueryDeviceHistoryData.Builder;
+import telecom.sdk.utils.Constant;
+import telecom.sdk.utils.HttpsUtil;
+import telecom.sdk.utils.JsonUtil;
+
+/**
+ * Create Device Command :
+ * 
+ * This interface is used to send command to device. If a device is not online,
+ * the IoT platform buffers the command and delivers the message to the device
+ * after the device is online. The NA can set the maximum buffering time.
+ */
+public class CreateDeviceCommand extends BaseApiEntity {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CreateDeviceCommand.class);
+    private String serviceId;
+    private String method;
+    private JSONObject paras;
+
+    public Builder build() {
+        return new Builder(this);
+    }
+
+    public class Builder extends BaseApiEntity.Builder<Builder> {
+
+        private CreateDeviceCommand instance;
+
+        public Builder(CreateDeviceCommand instance) {
+            super(instance);
+            this.instance = instance;
+        }
+
+        public CreateDeviceCommand create() {
+            return instance;
+        }
+
+        public Builder setServiceId(String serviceId) {
+            instance.serviceId = serviceId;
+            return this;
+        }
+
+        public Builder setMethod(String method) {
+            instance.method = method;
+            return this;
+        }
+
+        public Builder setParas(JSONObject paras) {
+            instance.paras = paras;
+            return this;
+        }
+    }
+
+    @Override
+    public HttpResponse process() throws Exception {
+        // Two-Way Authentication
+        HttpsUtil httpsUtil = HttpsUtil.getInstance();
+        httpsUtil.initSSLConfigForTwoWay();
+
+        // Authentication.get token
+        String accessToken = login(httpsUtil);
+
+        // Please make sure that the following parameter values have been
+        // modified in the Constant file.
+        String urlCreateDeviceCommand = this.baseUrl + Constant.CREATE_DEVICE_CMD_WITHOUT_BASE;
+        String callbackUrl = Constant.REPORT_CMD_EXEC_RESULT_CALLBACK_URL;
+
+        // please replace the following parameter values as required, when you
+        // call this interface.
+        Integer expireTime = 60 * 60 * 24;
+        Integer maxRetransmit = 3;
+
+        Map<String, Object> paramCommand = new HashMap<>();
+        paramCommand.put("serviceId", serviceId);
+        paramCommand.put("method", method);
+        paramCommand.put("paras", paras);
+
+        Map<String, Object> paramCreateDeviceCommand = new HashMap<>();
+        paramCreateDeviceCommand.put("deviceId", deviceId);
+        paramCreateDeviceCommand.put("command", paramCommand);
+        paramCreateDeviceCommand.put("callbackUrl", callbackUrl);
+        paramCreateDeviceCommand.put("expireTime", expireTime);
+        paramCreateDeviceCommand.put("maxRetransmit", maxRetransmit);
+
+        String jsonRequest = JsonUtil.jsonObj2Sting(paramCreateDeviceCommand);
+
+        Map<String, String> header = new HashMap<>();
+        header.put(Constant.HEADER_APP_KEY, appid);
+        header.put(Constant.HEADER_APP_AUTH, "Bearer" + " " + accessToken);
+
+        HttpResponse responseCreateDeviceCommand = httpsUtil.doPostJson(urlCreateDeviceCommand, header, jsonRequest);
+
+        String responseBody = httpsUtil.getHttpResponseBody(responseCreateDeviceCommand);
+        LOG.info("CreateDeviceCommand, response content:");
+        LOG.info("StatusLine: {}", responseCreateDeviceCommand.getStatusLine());
+        LOG.info("ResponseBody: {}", responseBody);
+        return responseCreateDeviceCommand;
+    }
+
+}

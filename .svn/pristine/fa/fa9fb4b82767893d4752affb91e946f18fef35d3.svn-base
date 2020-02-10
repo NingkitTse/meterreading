@@ -1,0 +1,106 @@
+package com.wasion.meterreading.task.context;
+
+public class DefaultCommandContext implements CommandContext {
+
+    private String snMeter;
+    private String baseUrl;
+    private String secret;
+    private String parameters;
+    private String paramJsonStr;
+    private String serviceId;
+    private String method;
+    private String platform;
+    private String imei;
+    private String deviceId;
+
+    public void setSnMeter(String snMeter) {
+        this.snMeter = snMeter;
+    }
+
+    public void setBaseUrl(String baseUrl) {
+        this.baseUrl = baseUrl;
+    }
+
+    public void setSecret(String secret) {
+        this.secret = secret;
+    }
+
+    public void setParameters(String parameters) {
+        this.parameters = parameters;
+    }
+
+    public void setParamJsonStr(String paramJsonStr) {
+        this.paramJsonStr = paramJsonStr;
+    }
+
+    public void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
+    }
+
+    public void setMethod(String method) {
+        this.method = method;
+    }
+
+    public void setPlatform(String platform) {
+        this.platform = platform;
+    }
+
+    public void setImei(String imei) {
+        this.imei = imei;
+    }
+
+    public void setDeviceId(String deviceId) {
+        this.deviceId = deviceId;
+    }
+
+    @Override
+    public String getSnMeter() {
+        return this.snMeter;
+    }
+
+    @Override
+    public String getBaseUrl() {
+        return this.baseUrl;
+    }
+
+    @Override
+    public String getSecret() {
+        return this.secret;
+    }
+
+    @Override
+    public String getParameters() {
+        return this.parameters;
+    }
+
+    @Override
+    public String getParamJsonStr() {
+        return this.paramJsonStr;
+    }
+
+    @Override
+    public String getServiceId() {
+        return this.serviceId;
+    }
+
+    @Override
+    public String getMethod() {
+        return this.method;
+    }
+
+    @Override
+    public String getPlatform() {
+        return this.platform;
+    }
+
+    @Override
+    public String getImei() {
+        return this.imei;
+    }
+
+    @Override
+    public String getDeviceId() {
+        return this.deviceId;
+    }
+
+}

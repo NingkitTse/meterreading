@@ -1,0 +1,9 @@
+package com.wasion.meterreading.service;
+
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext;
+
+public interface TelecomNotifyResolveServiceI {
+
+	void resolve(TelecomContext context);
+
+}

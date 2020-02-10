@@ -1,0 +1,161 @@
+package com.wasion.meterreading.entity.view;
+
+import java.util.Date;
+
+import javax.persistence.Column;
+import javax.persistence.EmbeddedId;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+import javax.persistence.Transient;
+
+import com.wasion.meterreading.domain.BaseValue;
+import com.wasion.meterreading.entity.FreezeDataId;
+
+@Entity
+@Table(name = "v_meter_freezen_data")
+public class VMeterFreezenData extends BaseValue {
+
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 5850301719739848784L;
+	@EmbeddedId
+	private FreezeDataId id;
+	@Column(name = "SN_DEVICE")
+	private String snDevice;
+	private String meterNo;
+
+	@Column(name = "FREEZEN_VALUE")
+	private Double freezenValue;
+	private String statusWord;
+
+	private Double battery;
+
+	@Column(name = "STATUS_VALUE")
+	private String statusValue;
+	private String imei;
+	private String imsi;
+	private String deviceId;
+
+	@Transient
+	private String rsrp;
+	@Transient
+	private String snr;
+	@Column(name = "REGISTER_DATE")
+	private Date registerDate;
+
+	private transient String searchKey;
+
+	public String getRsrp() {
+		return rsrp;
+	}
+
+	public void setRsrp(String rsrp) {
+		this.rsrp = rsrp;
+	}
+
+	public String getSnr() {
+		return snr;
+	}
+
+	public void setSnr(String snr) {
+		this.snr = snr;
+	}
+
+	public String getImei() {
+		return imei;
+	}
+
+	public void setImei(String imei) {
+		this.imei = imei;
+	}
+
+	public String getImsi() {
+		return imsi;
+	}
+
+	public void setImsi(String imsi) {
+		this.imsi = imsi;
+	}
+
+	public FreezeDataId getId() {
+		return id;
+	}
+
+	public void setId(FreezeDataId id) {
+		this.id = id;
+	}
+
+	public String getSnDevice() {
+		return snDevice;
+	}
+
+	public void setSnDevice(String snDevice) {
+		this.snDevice = snDevice;
+	}
+
+	public String getMeterNo() {
+		return meterNo;
+	}
+
+	public void setMeterNo(String meterNo) {
+		this.meterNo = meterNo;
+	}
+
+	public Double getFreezenValue() {
+		return freezenValue;
+	}
+
+	public void setFreezenValue(Double freezenValue) {
+		this.freezenValue = freezenValue;
+	}
+
+	public String getStatusWord() {
+		return statusWord;
+	}
+
+	public void setStatusWord(String statusWord) {
+		this.statusWord = statusWord;
+	}
+
+	public Double getBattery() {
+		return battery;
+	}
+
+	public void setBattery(Double battery) {
+		this.battery = battery;
+	}
+
+	public String getStatusValue() {
+		return statusValue;
+	}
+
+	public void setStatusValue(String statusValue) {
+		this.statusValue = statusValue;
+	}
+
+	public String getDeviceId() {
+		return deviceId;
+	}
+
+	public void setDeviceId(String deviceId) {
+		this.deviceId = deviceId;
+	}
+
+	public Date getRegisterDate() {
+		return registerDate;
+	}
+
+	public void setRegisterDate(Date registerDate) {
+		this.registerDate = registerDate;
+	}
+
+	public String getSearchKey() {
+		return searchKey;
+	}
+
+	public void setSearchKey(String searchKey) {
+		this.searchKey = searchKey;
+	}
+
+}

@@ -1,0 +1,68 @@
+package com.wasion.meterreading.service.impl.cache;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.domain.TCfgTeleServiceValue;
+import com.wasion.meterreading.exception.MRException;
+import com.wasion.meterreading.exception.MRExceptionEnum;
+import com.wasion.meterreading.orm.jpa.TCfgTeleServiceRepository;
+import com.wasion.meterreading.service.CacheService;
+import com.wasion.meterreading.util.ContextProvider;
+
+/**
+ * 电信服务解析配置缓存加载类
+ * 
+ * @author w24882
+ * @date 2019年11月13日
+ */
+@Service
+public class TeleServiceConfigCacheService implements CacheService<TCfgTeleServiceValue> {
+
+	private static final Logger LOG = LoggerFactory.getLogger(TeleServiceConfigCacheService.class);
+
+	private static final Map<String, TCfgTeleServiceValue> map = new HashMap<>();
+
+	@Override
+	public void init() {
+		LOG.debug("Start to init middle platform app config cache.");
+		TCfgTeleServiceRepository repository = ContextProvider.getBean(TCfgTeleServiceRepository.class);
+		Iterable<TCfgTeleServiceValue> configs = repository.findAll();
+		for (TCfgTeleServiceValue config : configs) {
+			String serviceId = config.getServiceId();
+			String resolverClassPath = config.getResolverClassPath();
+			String serviceDataClassPath = config.getServiceDataClassPath();
+			try {
+				Class<?> resolverClass = Class.forName(resolverClassPath);
+				config.setResolverClass(resolverClass);
+			} catch (ClassNotFoundException e) {
+				LOG.error("Resolver service<{}> failed, for config class path<{}> not found.", serviceId,
+						resolverClassPath);
+				throw new MRException(MRExceptionEnum.SystemConfigurationException);
+			}
+
+			try {
+				Class<?> serviceDataClass = Class.forName(serviceDataClassPath);
+				config.setServiceDataClass(serviceDataClass);
+			} catch (ClassNotFoundException e1) {
+				LOG.error("Resolver service<{}> failed, for config class path<{}> not found.", serviceId,
+						serviceDataClassPath);
+				throw new MRException(MRExceptionEnum.SystemConfigurationException);
+			}
+			map.put(config.getServiceId(), config);
+		}
+	}
+
+	/**
+	 * 通过APP_VALUE查询Config
+	 */
+	@Override
+	public TCfgTeleServiceValue getValue(String key) {
+		return map.get(key);
+	}
+
+}

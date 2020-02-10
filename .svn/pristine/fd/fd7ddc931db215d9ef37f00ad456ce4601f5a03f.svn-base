@@ -1,0 +1,152 @@
+package com.wasion.meterreading.task.context;
+
+import java.util.List;
+
+import com.wasion.meterreading.entity.RtTaskOnlineV1910;
+import com.wasion.meterreading.entity.TCfgAppsConfig;
+import com.wasion.meterreading.entity.TCfgProtocolCmd;
+import com.wasion.meterreading.task.process.CommandSender;
+
+public abstract class DefaultCommandContext implements CommandContext {
+
+    private String snMeter;
+    private String platform;
+    private String imei;
+    private String deviceId;
+    private RtTaskOnlineV1910 task;
+    private TCfgAppsConfig appConfig;
+    private TCfgProtocolCmd protocolCmd;
+    private List<RtTaskOnlineV1910> successCommands;
+    private List<RtTaskOnlineV1910> failCommands;
+    private CommandSender currentSender;
+
+    public TCfgProtocolCmd getProtocolCmd() {
+        return protocolCmd;
+    }
+
+    public void setProtocolCmd(TCfgProtocolCmd protocolCmd) {
+        this.protocolCmd = protocolCmd;
+    }
+
+    public void setTask(RtTaskOnlineV1910 task) {
+        this.task = task;
+    }
+
+    public void setAppConfig(TCfgAppsConfig appConfig) {
+        this.appConfig = appConfig;
+    }
+
+    public void setSnMeter(String snMeter) {
+        this.snMeter = snMeter;
+    }
+
+    public void setPlatform(String platform) {
+        this.platform = platform;
+    }
+
+    public void setImei(String imei) {
+        this.imei = imei;
+    }
+
+    public void setDeviceId(String deviceId) {
+        this.deviceId = deviceId;
+    }
+
+    @Override
+    public String getSnMeter() {
+        return this.snMeter;
+    }
+
+    @Override
+    public String getParameters() {
+        return this.task == null ? null : this.task.getParameters();
+    }
+
+    @Override
+    public String getParamJsonStr() {
+        return this.task == null ? null : this.task.getParamJsonStr();
+    }
+
+    @Override
+    public String getPlatform() {
+        return this.platform;
+    }
+
+    @Override
+    public String getImei() {
+        return this.imei;
+    }
+
+    @Override
+    public String getDeviceId() {
+        return this.deviceId;
+    }
+
+    public RtTaskOnlineV1910 getTask() {
+        return this.task;
+    }
+
+    public TCfgAppsConfig getAppConfig() {
+        return this.appConfig;
+    }
+
+    @Override
+    public String getCmdId() {
+        return this.task == null ? null : this.task.getSnProtocolCommand();
+    }
+
+    public List<RtTaskOnlineV1910> getSuccessCommands() {
+        return successCommands;
+    }
+
+    public void setSuccessCommands(List<RtTaskOnlineV1910> successCommands) {
+        this.successCommands = successCommands;
+    }
+
+    public List<RtTaskOnlineV1910> getFailCommands() {
+        return failCommands;
+    }
+
+    public void setFailCommands(List<RtTaskOnlineV1910> failCommands) {
+        this.failCommands = failCommands;
+    }
+
+    @Override
+    public void process() {
+        if (null == currentSender) {
+            return;
+        }
+        CommandSender pre = currentSender;
+        if (currentSender.hasNext()) {
+            currentSender = currentSender.next();
+        }
+        pre.sendCommand(this);
+    }
+
+    public CommandSender getCurrentSender() {
+        return currentSender;
+    }
+
+    public void setCurrentSender(CommandSender currentSender) {
+        this.currentSender = currentSender;
+    }
+
+    @Override
+    public void fail(RtTaskOnlineV1910 command, String traceId, String remark) {
+        CommandContext.super.fail(command, traceId, remark);
+        this.failCommands.add(command);
+    }
+
+    @Override
+    public void fail(RtTaskOnlineV1910 command, String traceId) {
+        CommandContext.super.fail(command, traceId);
+        this.failCommands.add(command);
+    }
+
+    @Override
+    public void success(RtTaskOnlineV1910 command, String status, String commandId) {
+        CommandContext.super.success(task, status, commandId);
+        this.successCommands.add(command);
+    }
+
+}

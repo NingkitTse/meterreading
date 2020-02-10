@@ -1,0 +1,30 @@
+{
+	"ReadIpAndPort": {
+		"resp": {
+			"msg": {
+				"at": 1576828182709,
+				"imei": "869975037677104",
+				"type": 1,
+				"ds_id": "3200_0_5750",
+				"value": "681071565022180400810CECCE09001D06B7E6282733167516",
+				"dev_id": 576096445
+			},
+			"msg_signature": "H60kU2LlDEahPJB99zBj8Q==",
+			"nonce": "_wk73A)a"
+		}
+	},
+	"WriteUploadCycle": {
+		"resp": {
+			"msg": {
+				"at": 1576829784640,
+				"imei": "869975037677104",
+				"type": 1,
+				"ds_id": "3200_0_5750",
+				"value": "6810715650221804008406ECCD0B001C013816",
+				"dev_id": 576096445
+			},
+			"msg_signature": "7xcj/2WWmbR0FuVm+DXC7A==",
+			"nonce": "vCtnQ^$D"
+		}
+	}
+}

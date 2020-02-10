@@ -1,0 +1,73 @@
+package com.wasion.meterreading.service.impl.telecom.cr;
+
+import java.util.List;
+
+import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.alibaba.fastjson.JSONObject;
+import com.wasion.meterreading.domain.RtTaskOnlineV1910;
+import com.wasion.meterreading.domain.TCfgProtocolCmdParam;
+import com.wasion.meterreading.domain.dto.telecom.ServiceData;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext;
+import com.wasion.meterreading.domain.dto.telecom.TelecomContext.DataMapKey;
+import com.wasion.meterreading.service.impl.telecom.CommandServiceResolverI;
+
+/**
+ * 默认命令回调解析器， 将回调参数以";" 拼接保存至
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年11月18日
+ */
+
+@Service
+public class DefaultCommandRspResolver implements CommandServiceResolverI {
+	private final static Logger LOG = LoggerFactory.getLogger(DefaultCommandRspResolver.class);
+
+	/**
+	 * ParamType 出参标识
+	 */
+	private final static String PARAM_TYPE_OUT_PARAM = "0";
+
+	@Override
+	public void resolveServiceData(TelecomContext context, ServiceData serviceData) {
+
+	}
+
+	@Override
+	public void callbackLocalTask(TelecomContext context, ServiceData data, RtTaskOnlineV1910 localTask) {
+		StringBuffer returnData = new StringBuffer();
+
+		JSONObject jsonObject = (JSONObject) data.getData();
+		Set<String> keySet = jsonObject.keySet();
+		LOG.debug("Command upload body contains params: [{}]", keySet);
+
+		@SuppressWarnings("unchecked")
+		List<TCfgProtocolCmdParam> params = (List<TCfgProtocolCmdParam>) context
+				.get(DataMapKey.DATA_COMMAND_PARAMS_KEY);
+
+		int index = 0;
+		for (TCfgProtocolCmdParam param : params) {
+			String paramType = param.getParamType();
+			LOG.debug("Param[{}]'s key is {}, type is {}", index, param.getParamKey(), paramType);
+			if (!PARAM_TYPE_OUT_PARAM.equals(paramType)) {
+				continue;
+			}
+			String paramKey = param.getParamKey();
+			if (!keySet.contains(paramKey)) {
+				continue;
+			}
+			returnData.append(jsonObject.getString(paramKey) + ";"); // 与老采集回填参数的风格保持一致
+			index++;
+		}
+
+		int len = returnData.length();
+		if (len > 0) {
+			localTask.setReturnData(returnData.substring(0, len - 1));
+		}
+	}
+
+}

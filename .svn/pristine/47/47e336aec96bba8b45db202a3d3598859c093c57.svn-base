@@ -1,0 +1,9 @@
+package com.wasion.meterreading.orm.jpa;
+
+import org.springframework.data.repository.CrudRepository;
+
+import com.wasion.meterreading.domain.TCfgTeleServiceValue;
+
+public interface TCfgTeleServiceRepository extends CrudRepository<TCfgTeleServiceValue, String> {
+
+}

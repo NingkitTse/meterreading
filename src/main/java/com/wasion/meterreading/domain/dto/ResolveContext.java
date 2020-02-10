@@ -1,0 +1,63 @@
+package com.wasion.meterreading.domain.dto;
+
+/**
+ * 解析上下文
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年11月19日
+ */
+public interface ResolveContext {
+
+	String getImei();
+
+	void setImei(String imei);
+
+	String getSnMeter();
+
+	void setSnMeter(String snMeter);
+
+	String getSnDevice();
+
+	void setSnDevice(String snDevice);
+
+	String getMeterNo();
+
+	void setMeterNo(String meterNo);
+
+	String getDeviceId();
+
+	void setDeviceId(String deviceId);
+
+	String getNotifyType();
+
+	void setNotifyType(String notifyType);
+
+	Object getServiceData();
+
+	void setServiceData(Object data);
+
+	Object getData();
+
+	void setData(Object data);
+
+	void put(DataMapKey key, Object value);
+
+	Object get(DataMapKey key);
+
+	public enum DataMapKey {
+		IMEI_KEY, SN_METER_KEY, SN_DEVICE_KEY, METER_NO_KEY, DEVICE_ID_KEY, FRAME_VALUE_KEY, NOTIFY_TYPE_KEY, SERVICE_DATA_KEY,
+		/**
+		 * DataMap 命令参数Key 值
+		 */
+		DATA_COMMAND_PARAMS_KEY,
+		/**
+		 * 冻结数据键值
+		 */
+		FREEZE_DATA_KEY,
+		/**
+		 * 冻结数据列表键值
+		 */
+		FREEZE_DATA_LIST_KEY,
+		;
+	}
+}

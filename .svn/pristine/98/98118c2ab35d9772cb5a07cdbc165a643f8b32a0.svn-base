@@ -1,0 +1,9 @@
+package com.wasion.meterreading.orm.jpa.freezedata;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.wasion.meterreading.entity.freezedata.FreezeDataId;
+import com.wasion.meterreading.entity.freezedata.PointFreezeDataValue;
+
+public interface PointFreezeDataRepository extends JpaRepository<PointFreezeDataValue, FreezeDataId> {
+}

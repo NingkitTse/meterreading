@@ -1,0 +1,26 @@
+server:
+  port: 12345
+#  http:
+#    port: 12443
+#  ssl:
+#    key-store: classpath:ssl/localhost/my.p12
+#    key-store-password: Weiming@2018
+#    keyStoreType: PKCS12
+spring:
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    url: jdbc:oracle:thin:@localhost:1521:ningkit
+    driver-class-name: oracle.jdbc.driver.OracleDriver
+    username: ECAS_WATER
+    password: ECAS_WATER
+  jpa:
+    database: oracle
+    show-sql: true
+    generate-ddl: false
+    hibernate:
+      ddl-auto: update
+  thymeleaf:
+    prefix: classpath:/templates/
+mybatis:
+  type-aliases-package: com.ramostear.hm.model
+  mapper-locations: classpath:mapper/*.xml

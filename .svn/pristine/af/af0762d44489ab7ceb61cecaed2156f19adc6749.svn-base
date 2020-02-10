@@ -1,0 +1,198 @@
+package com.wasion.meterreading.task;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.http.HttpResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.wasion.meterreading.domain.RtTaskOnlineV1910;
+import com.wasion.meterreading.domain.TCfgAppsConfig;
+import com.wasion.meterreading.domain.TCfgProtocolCmd;
+import com.wasion.meterreading.domain.TRunMeterDocu;
+import com.wasion.meterreading.domain.TRunMeterDocuId;
+import com.wasion.meterreading.orm.jpa.RtTaskOnlineV1910Repository;
+import com.wasion.meterreading.orm.jpa.TCfgProtocolCmdRepository;
+import com.wasion.meterreading.orm.jpa.TRunMeterDocuRepository;
+import com.wasion.meterreading.service.impl.cache.AppConfigCacheService;
+import com.wasion.meterreading.util.CommonUtil;
+
+import telecom.sdk.service.commandDelivery.CreateDeviceCommand;
+import telecom.sdk.utils.HttpsUtil;
+
+/**
+ * 【水表命令执行】任务
+ * 
+ * @author w24882
+ * @date 2019年11月13日
+ */
+@ConditionalOnProperty(name = "task.iot.command.process.enable", havingValue = "true")
+@Component
+public class CommandProcessTask {
+
+	private static final Logger LOG = LoggerFactory.getLogger(CommandProcessTask.class);
+	/**
+	 * 未执行成功标识
+	 */
+	private static final Integer STATE_NOT_EXECUTE = -1;
+	/**
+	 * 未执行成功标识
+	 */
+	private static final Integer STATE_EXECUTE_SUCCESS = 1;
+	/**
+	 * 未执行成功标识
+	 */
+	private static final Integer STATE_EXECUTE_FAILURE = 0;
+
+	private static final String PROTOCOL_NO_DEVICE_ID = "JCM0101";
+	@Autowired
+	private AppConfigCacheService cacheService;
+	@Autowired
+	private RtTaskOnlineV1910Repository taskRepo;
+	@Autowired
+	private TCfgProtocolCmdRepository cmdRepo; // 命令仓库
+	@Autowired
+	private TRunMeterDocuRepository docuRepo; // 表计拓展参数仓库
+
+	private ExecutorService executor = Executors.newCachedThreadPool();
+
+	private Comparator<RtTaskOnlineV1910> comparator = new Comparator<RtTaskOnlineV1910>() {
+
+		/**
+		 * 优先级大的在前
+		 */
+		@Override
+		public int compare(RtTaskOnlineV1910 o1, RtTaskOnlineV1910 o2) {
+			return -(o1.getCommandPriority() - o2.getCommandPriority());
+		}
+	};
+
+	@Scheduled(cron = "0/2 * * * * *")
+	public void scheduled() {
+		List<RtTaskOnlineV1910> commands = taskRepo.findBySuccess(STATE_NOT_EXECUTE);
+		List<RtTaskOnlineV1910> successCommands = new ArrayList<>();
+		List<RtTaskOnlineV1910> failCommands = new ArrayList<>();
+		Map<RtTaskOnlineV1910, Future<HttpResponse>> futureMap = new HashMap<>();
+
+		if (CollectionUtils.isEmpty(commands)) {
+			return;
+		}
+
+		// 按照优先级先排一波序
+		Collections.sort(commands, comparator);
+		for (RtTaskOnlineV1910 command : commands) {
+			Integer executedTimes = command.getExecutedTimes() == null ? 1 : command.getExecutedTimes() + 1;
+			Integer maxExecuteTimes = command.getMaxExecuteTimes() == null ? 0 : command.getMaxExecuteTimes();
+			command.setExecutedTimes(executedTimes);
+			command.setMaxExecuteTimes(maxExecuteTimes);
+
+			String parameters = command.getParameters();
+			String appid = command.getWlwAppId();
+			String cmdId = command.getSnProtocolCommand();
+			String snMeter = command.getSnMeter();
+			TCfgAppsConfig appConfig = cacheService.getValue(appid);
+			Optional<TCfgProtocolCmd> cmdOp = cmdRepo.findById(cmdId);
+			if (!cmdOp.isPresent()) {
+				if (executedTimes >= maxExecuteTimes) {
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setRemark("命令不存在");
+					command.setExceptionCode(500);
+				}
+				failCommands.add(command);
+				continue;
+			}
+			TCfgProtocolCmd protocolCmd = cmdOp.get();
+			Optional<TRunMeterDocu> docuDeviceIdOp = docuRepo
+					.findById(new TRunMeterDocuId(snMeter, PROTOCOL_NO_DEVICE_ID));
+			if (!cmdOp.isPresent()) {
+				if (executedTimes >= maxExecuteTimes) {
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setRemark("Docu配置DeviceId不存在");
+					command.setExceptionCode(500);
+				}
+				failCommands.add(command);
+				continue;
+			}
+
+			String deviceId = docuDeviceIdOp.get().getParamValue();
+			String baseUrl = appConfig.getBaseUrl();
+			String secret = appConfig.getSecret();
+			String serviceId = protocolCmd.getServiceId();
+			String method = protocolCmd.getMethod();
+
+			Future<HttpResponse> submit = executor.submit(() -> {
+				try {
+					return CreateDeviceCommand.submitDeviceCommand(baseUrl, appid, secret, serviceId, method, deviceId,
+							JSON.parseObject(parameters));
+				} catch (Exception e1) {
+					e1.printStackTrace();
+				}
+				return null;
+			});
+			futureMap.put(command, submit);
+		}
+
+		for (Entry<RtTaskOnlineV1910, Future<HttpResponse>> entry : futureMap.entrySet()) {
+			RtTaskOnlineV1910 command = entry.getKey();
+			Integer maxExecuteTimes = command.getMaxExecuteTimes();
+			Integer executedTimes = command.getExecutedTimes();
+			Future<HttpResponse> future = entry.getValue();
+			try {
+				HttpResponse response = future.get();
+				if (null == response) {
+					LOG.error("Publish command to platform failed, command: {}", command);
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setExceptionCode(500);
+					failCommands.add(command);
+					continue;
+				}
+				final int statusCode = response.getStatusLine().getStatusCode();
+				if (statusCode == HttpStatus.CREATED.value()) {
+					String responseBody = HttpsUtil.getInstance().getHttpResponseBody(response);
+					JSONObject rspObj = JSON.parseObject(responseBody);
+					String status = rspObj.getString("status");
+					command.setWlwCmdStatus(status);
+					command.setSuccess(STATE_EXECUTE_SUCCESS);
+					successCommands.add(command);
+				} else {
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setExceptionCode(statusCode);
+					failCommands.add(command);
+				}
+			} catch (InterruptedException | ExecutionException | UnsupportedOperationException | IOException e1) {
+				LOG.error("Publish command to platform failed, command: {}", command);
+				String traceId = CommonUtil.getUuid();
+				if (executedTimes >= maxExecuteTimes) {
+					command.setSuccess(STATE_EXECUTE_FAILURE);
+					command.setRemark("下发命令失败, traceId:" + traceId);
+					command.setExceptionCode(500);
+				}
+				failCommands.add(command);
+			}
+		}
+
+		taskRepo.saveAll(commands);
+		LOG.info("Success num-> {}, Failure num-> {}, Total num-> {}", successCommands.size(), failCommands.size(),
+				commands.size());
+	}
+}

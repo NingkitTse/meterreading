@@ -1,0 +1,33 @@
+package com.wasion.meterreading.orm.jpa;
+
+import java.util.Date;
+import java.util.List;
+
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
+
+import com.wasion.meterreading.entity.RtTaskOnlineV1910;
+
+public interface RtTaskOnlineV1910Repository extends CrudRepository<RtTaskOnlineV1910, String> {
+
+    List<RtTaskOnlineV1910> findBySuccessOrderByCommandPriority(Integer success, Pageable pageable);
+
+    /**
+     * 通过WlwCommandId查找命令
+     * 
+     * @param cmdId 物联网平台CommandId
+     * @return 命令对象
+     * @author w24882 xieningjie
+     * @date 2019年11月18日
+     */
+    RtTaskOnlineV1910 findByCommandId(String cmdId);
+
+    @Query(value = "select SEQ_RT_TASK_ONLINE_V1910.NEXTVAL from dual", nativeQuery = true)
+    Integer getSeq();
+
+    @Query("select t from RtTaskOnlineV1910 t where t.snMeter = :snMeter and t.timeCreate > :validDate and mod(t.seq, 255) = :seq")
+    RtTaskOnlineV1910 findBySnMeterAndSeqAndTimeCreate(@Param(value = "snMeter") String snMeter, @Param(value = "seq") Integer seq, @Param(value = "validDate") Date validDate);
+
+}

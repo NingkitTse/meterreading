@@ -1,0 +1,144 @@
+package com.wasion.meterreading.service.impl.mobile;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.wasion.meterreading.domain.EventReportValue;
+import com.wasion.meterreading.domain.EventReportValue.EventCodeEnum;
+import com.wasion.meterreading.service.ResolveServiceI;
+import com.wasion.meterreading.util.ParseUtil;
+
+/**
+ * 事件上报数据解析器
+ * 
+ * @author w24882
+ * @date 2019年10月15日
+ */
+@Service
+public class EventReportResolver implements ResolveServiceI<EventReportValue> {
+
+	private static final Logger LOG = LoggerFactory.getLogger(EventReportResolver.class);
+
+	private static final SimpleDateFormat SDF = new SimpleDateFormat("yyyyMMddHHmmss");
+
+	@Override
+	public EventReportValue resolveData(Map<String, Object> baseDataMap, String dataStr) {
+		return null;
+	}
+
+	@Override
+	public List<EventReportValue> resolveDataList(Map<String, Object> baseDataMap, String dataStr) {
+		LOG.debug("Start parse event report data. Data str -> {}", dataStr);
+		List<EventReportValue> retList = new ArrayList<>();
+		EventReportValue eventReportValue = new EventReportValue();
+		int index1 = 0;
+		String seq = dataStr.substring(index1, index1 + 2);
+		eventReportValue.setSeq(seq);
+		index1 += 2;
+		Integer len = ParseUtil.hexToInt(dataStr.substring(index1, index1 + 2));
+		index1 += 2;
+		String eventCode = dataStr.substring(index1, index1 + 2);
+		index1 += 2;
+
+		for (int i = 0; i < len; ++i) {
+			EventReportValue newValue = null;
+			try {
+				newValue = (EventReportValue) eventReportValue.clone();
+			} catch (CloneNotSupportedException e1) {
+				LOG.error("Clone failed");
+			}
+			final String startTimeStr = dataStr.substring(index1, index1 + 14);
+			index1 += 14;
+			try {
+				Date startDateTime = SDF.parse(startTimeStr);
+				newValue.getId().setStartDateTime(startDateTime);
+			} catch (ParseException e) {
+				LOG.error("Parse date failed with value startTimeStr {}.", startTimeStr);
+				e.printStackTrace();
+			}
+
+			switch (eventCode) {
+			case "50": // 磁干扰
+				index1 = processMagneticDisturbance(dataStr, index1, newValue);
+				break;
+			case "51":
+				newValue.setEventCode(EventCodeEnum.MDayNoWater);
+				break;
+			case "52":
+				newValue.setEventCode(EventCodeEnum.DataAlwaysClear);
+				break;
+			case "53":
+				index1 = processValveFailure(dataStr, index1, newValue);
+				break;
+			case "54":
+				newValue.setEventCode(EventCodeEnum.FlowFailure);
+				break;
+			case "55":
+				newValue.setEventCode(EventCodeEnum.LetOut);
+				break;
+			case "56":
+				newValue.setEventCode(EventCodeEnum.UnderVoltage);
+				break;
+			case "57": // 掉电
+				index1 = processPowerDown(dataStr, index1, newValue);
+				break;
+			default:
+				break;
+			}
+			retList.add(newValue);
+		}
+		LOG.debug("Event report parse ret-> {}", retList);
+		return retList;
+	}
+
+	private int processPowerDown(String dataStr, int index1, EventReportValue newValue) {
+		newValue.setEventCode(EventCodeEnum.PowerDown);
+		final Double powerDownCumulant = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 8));
+		index1 += 8;
+		newValue.setCumulant(powerDownCumulant);
+		return index1;
+	}
+
+	private int processValveFailure(String dataStr, int index1, EventReportValue newValue) {
+		newValue.setEventCode(EventCodeEnum.ValveFailure);
+		final String valveFailureEndTimeStr = dataStr.substring(index1, index1 + 14);
+		index1 += 14;
+		try {
+			Date endDateTime = SDF.parse(valveFailureEndTimeStr);
+			newValue.setEndDateTime(endDateTime);
+		} catch (ParseException e) {
+			LOG.error("Parse date failed with value endTimeStr {}.", valveFailureEndTimeStr);
+			e.printStackTrace();
+		}
+		final Double vfCumulant = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 8));
+		index1 += 8;
+		newValue.setCumulant(vfCumulant);
+		return index1;
+	}
+
+	private int processMagneticDisturbance(String dataStr, int index1, EventReportValue newValue) {
+		newValue.setEventCode(EventCodeEnum.MagneticDisturbance);
+		final String endTimeStr = dataStr.substring(index1, index1 + 14);
+		index1 += 14;
+		try {
+			Date endDateTime = SDF.parse(endTimeStr);
+			newValue.setEndDateTime(endDateTime);
+		} catch (ParseException e) {
+			LOG.error("Parse date failed with value endTimeStr {}.", endTimeStr);
+			e.printStackTrace();
+		}
+		final Double mdCumulant = ParseUtil.hexToDoulbe(dataStr.substring(index1, index1 + 8));
+		index1 += 8;
+		newValue.setCumulant(mdCumulant);
+		return index1;
+	}
+
+}

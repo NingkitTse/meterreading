@@ -1,0 +1,148 @@
+package com.wasion.meterreading.service.impl.mobile.ddc;
+
+import java.util.Date;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.wasion.meterreading.constant.SystemConstant;
+import com.wasion.meterreading.domain.FrameValue;
+import com.wasion.meterreading.domain.dto.ResolveContext;
+import com.wasion.meterreading.domain.dto.ResolveContext.DataMapKey;
+import com.wasion.meterreading.domain.dto.mobile.MobileContext;
+import com.wasion.meterreading.entity.RtTaskOnlineV1910;
+import com.wasion.meterreading.entity.TCfgProtocolCmdParam;
+import com.wasion.meterreading.entity.view.VMeterDevice;
+import com.wasion.meterreading.exception.MRException;
+import com.wasion.meterreading.exception.MRExceptionEnum;
+import com.wasion.meterreading.orm.jpa.RtTaskOnlineV1910Repository;
+import com.wasion.meterreading.orm.jpa.TCfgProtocolCmdParamRepository;
+import com.wasion.meterreading.orm.jpa.VMeterDeviceRepository;
+import com.wasion.meterreading.service.impl.mobile.MobileResolveServiceI;
+import com.wasion.meterreading.util.ParseUtil;
+
+/**
+ * 抄表指令响应解析类
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年12月12日
+ */
+public abstract class AbstractParamCmdRspResolver implements MobileResolveServiceI {
+
+    private Logger LOG = LoggerFactory.getLogger(this.getClass());
+
+    @Autowired
+    private RtTaskOnlineV1910Repository taskRepo;
+    @Autowired
+    private VMeterDeviceRepository deviceRepo;
+    @Autowired
+    private TCfgProtocolCmdParamRepository cmdParamRepo;
+
+    public abstract void preProcess(ResolveContext context);
+
+    public abstract void postProcess(ResolveContext context);
+
+    /**
+     * 样例数据
+     * 
+     * <pre>
+     * {
+           "msg": {
+               "at": 1576660058541,
+               "imei": "869975037677104",
+               "type": 1,
+               "ds_id": "3200_0_5750",
+               "value": "681071565022180400810CECCE01001D06B7E6282733166D16",
+               "dev_id": 576096445
+           },
+           "msg_signature": "M5tGdagG3S+myMMnYFAmcQ==",
+           "nonce": "DyT0*_Wf"
+       }
+     * </pre>
+     * 
+     * 传递到这里的数据：01 001D 06 B7 E6 28 27 3316 6D 16 序号：01 参数类型： 00 1D （IP端口） 长度：06
+     * IP：B7E62827 PORT: 3316
+     * 
+     */
+    @Override
+    public void resolveData(ResolveContext context) {
+        preProcess(context);
+        resolve(context);
+        postProcess(context);
+    }
+
+    private void resolve(ResolveContext context) {
+        MobileContext mobileContext = (MobileContext) context;
+        FrameValue frameValue = (FrameValue) mobileContext.get(DataMapKey.FRAME_VALUE_KEY);
+        String deviceId = context.getDeviceId();
+        String seq = frameValue.next(2);
+        String paramType = frameValue.next(4);
+        // 校验设备是否存在
+        VMeterDevice device = deviceRepo.findByDeviceId(deviceId);
+        if (null == device) {
+            LOG.error("Device is not exsit.");
+            throw new MRException(MRExceptionEnum.DeviceNotExsit);
+        }
+        // 只查近两天下发的任务
+        Date validDate = new Date(System.currentTimeMillis() - 2 * 24 * 60 * 60 * 1000);
+        // 查找对应的下发命令
+        RtTaskOnlineV1910 taskOnlineV1910 = taskRepo.findBySnMeterAndSeqAndTimeCreate(device.getSnMeter(), ParseUtil.hexToInt(seq), validDate);
+        if (null == taskOnlineV1910) {
+            LOG.error("There is no valid command task with snMeter: {}, seq: {}[HEX].", device.getSnMeter(), seq);
+            throw new MRException(MRExceptionEnum.CommnadTaskNotExsit);
+        }
+        String paramJsonStr = taskOnlineV1910.getParamJsonStr();
+        JSONObject paramJsonObj = JSON.parseObject(paramJsonStr);
+        String paraId = paramJsonObj.getString("paraId");
+        // 校验上报数据类型是否与下发的命令一致
+        if (!paramType.equals(paraId) && !paramType.equals(ParseUtil.bcdToString(paraId))) {
+            LOG.error("Command param id is not fitted. Upload paramId is {}, command task's param id is {}.", paramType, paraId);
+            throw new MRException(MRExceptionEnum.InvalidReportData, "ParamId is not fitted.");
+        }
+        List<TCfgProtocolCmdParam> params = cmdParamRepo.findByCmdIdAndParamTypeOrderByParamNo(taskOnlineV1910.getSnProtocolCommand(), "0");
+        String returnData = "";
+        for (TCfgProtocolCmdParam param : params) {
+            Integer byteLen = param.getByteLen();
+            int len = byteLen * 2;
+            if (!frameValue.hasNext(len)) {
+                continue;
+            }
+            String paramOriginVal = frameValue.next(len);
+            String paramFrameType = param.getParamFrameType();
+            String paramVal = "";
+            switch (paramFrameType) {
+            case "BCD":
+                paramVal = ParseUtil.bcdToString(paramOriginVal);
+                break;
+            case "HEX": // 数据传输超过一个字节时，都要低位在前高位在后
+                paramVal = ParseUtil.hexToInt(ParseUtil.bcdToString(paramOriginVal)) + "";
+                break;
+            case "IP": {
+                for (int j = 0; j < 8; j += 2) {
+                    int num = ParseUtil.hexToInt(paramOriginVal.substring(j, j + 2));
+                    paramVal = paramVal + num + ".";
+                }
+                paramVal = paramVal.substring(0, paramVal.length() - 1);
+                break;
+            }
+            default:
+                paramVal = paramOriginVal;
+                break;
+            }
+            returnData += paramVal + SystemConstant.TASK_RETURN_DATA_SEPERATOR;
+        }
+        if (returnData.endsWith(",")) {
+            returnData = returnData.substring(0, returnData.length() - 1);
+        }
+        taskOnlineV1910.setReturnData(returnData);
+        taskRepo.save(taskOnlineV1910);
+        LOG.info("Save command response succeed. Command object is {}.", taskOnlineV1910);
+    }
+    public static void main(String[] args) {
+        System.out.println(ParseUtil.hexToInt("1633") + "");
+    }
+}

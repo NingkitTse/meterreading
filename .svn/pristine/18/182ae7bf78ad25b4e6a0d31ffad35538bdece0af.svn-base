@@ -1,0 +1,12 @@
+package com.wasion.meterreading.constant;
+
+public class UploadDataConstant {
+	public static final String DEVICE_ID_KEY = "deviceId";
+	public static final String REGISTER_DATE_KEY = "registerDate";
+	public static final String START_CHAR_KEY = "startChar";
+	public static final String METER_TYPE_KEY = "meterType";
+	public static final String METER_NO_KEY = "meterNo";
+	public static final String CONTROL_CODE_KEY = "controlCode";
+	public static final String DATA_SIGN_KEY = "dataSign";
+	public static final String DATA_STR_KEY = "dataStr";
+}

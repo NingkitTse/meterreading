@@ -1,0 +1,84 @@
+package com.wasion.meterreading.domain.dto.telecom;
+
+import com.wasion.meterreading.domain.BaseValue;
+
+public class TelecomContext extends BaseValue {
+
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 2790363426321474034L;
+	private String deviceId;
+	private String imei;
+	private String imsi;
+	private String notifyType;
+	private String snMeter;
+	private String snDevice;
+	private String meterNo;
+	private Object data;
+
+	public String getDeviceId() {
+		return deviceId;
+	}
+
+	public void setDeviceId(String deviceId) {
+		this.deviceId = deviceId;
+	}
+
+	public String getImei() {
+		return imei;
+	}
+
+	public void setImei(String imei) {
+		this.imei = imei;
+	}
+
+	public String getImsi() {
+		return imsi;
+	}
+
+	public void setImsi(String imsi) {
+		this.imsi = imsi;
+	}
+
+	public String getNotifyType() {
+		return notifyType;
+	}
+
+	public void setNotifyType(String notifyType) {
+		this.notifyType = notifyType;
+	}
+
+	public Object getData() {
+		return data;
+	}
+
+	public void setData(Object data) {
+		this.data = data;
+	}
+
+	public String getSnMeter() {
+		return snMeter;
+	}
+
+	public void setSnMeter(String snMeter) {
+		this.snMeter = snMeter;
+	}
+
+	public String getSnDevice() {
+		return snDevice;
+	}
+
+	public void setSnDevice(String snDevice) {
+		this.snDevice = snDevice;
+	}
+
+	public String getMeterNo() {
+		return meterNo;
+	}
+
+	public void setMeterNo(String meterNo) {
+		this.meterNo = meterNo;
+	}
+
+}

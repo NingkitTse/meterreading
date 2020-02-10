@@ -1,0 +1,348 @@
+package com.wasion.meterreading.domain;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
+
+/**
+ * TCfgProtocolCmd entity. @author MyEclipse Persistence Tools
+ */
+@SuppressWarnings("serial")
+@Entity
+@Table(name = "T_CFG_PROTOCOL_CMD")
+public class TCfgProtocolCmd implements java.io.Serializable {
+
+	// Fields
+
+	private String cmdId;
+	private Integer protocolNo;
+	private String afn;
+	private String fn;
+	private String afnName;
+	private String fnName;
+	private Integer isTrans;
+	private String transCmd;
+	private Integer isEnabled;
+	private Integer isMeterCmd;
+	private String supportMeterType;
+	private String isShow;
+	private Integer cmdType;
+	private Integer priority;
+	private Integer excTimes;
+	private Integer cmdStyle;
+	private Integer dataType;
+	private String haveDetailFlag;
+	private String isUseDocument;
+	private String inputParamCount;
+	private String outputParamCount;
+	private String isEnableReload;
+	private String pageDebugFlag;
+	private String linkCardProtocol;
+	private String dataFormat;
+	private String unit;
+	private String serviceId;
+	private String method;
+	// Constructors
+
+	/** default constructor */
+	public TCfgProtocolCmd() {
+	}
+
+	/** minimal constructor */
+	public TCfgProtocolCmd(String cmdId, Integer protocolNo, String afn, String fn, String afnName, String fnName,
+			Integer isEnabled) {
+		this.cmdId = cmdId;
+		this.protocolNo = protocolNo;
+		this.afn = afn;
+		this.fn = fn;
+		this.afnName = afnName;
+		this.fnName = fnName;
+		this.isEnabled = isEnabled;
+	}
+
+	/** full constructor */
+	public TCfgProtocolCmd(String cmdId, Integer protocolNo, String afn, String fn, String afnName, String fnName,
+			Integer isTrans, String transCmd, Integer isEnabled, Integer isMeterCmd, String supportMeterType,
+			String isShow, Integer cmdType, Integer priority, Integer excTimes, Integer cmdStyle, Integer dataType,
+			String haveDetailFlag, String isUseDocument, String inputParamCount, String outputParamCount,
+			String isEnableReload) {
+		this.cmdId = cmdId;
+		this.protocolNo = protocolNo;
+		this.afn = afn;
+		this.fn = fn;
+		this.afnName = afnName;
+		this.fnName = fnName;
+		this.isTrans = isTrans;
+		this.transCmd = transCmd;
+		this.isEnabled = isEnabled;
+		this.isMeterCmd = isMeterCmd;
+		this.supportMeterType = supportMeterType;
+		this.isShow = isShow;
+		this.cmdType = cmdType;
+		this.priority = priority;
+		this.excTimes = excTimes;
+		this.cmdStyle = cmdStyle;
+		this.dataType = dataType;
+		this.haveDetailFlag = haveDetailFlag;
+		this.isUseDocument = isUseDocument;
+		this.inputParamCount = inputParamCount;
+		this.outputParamCount = outputParamCount;
+		this.isEnableReload = isEnableReload;
+	}
+
+	// Property accessors
+	@Id
+	@Column(name = "CMD_ID", unique = true, nullable = false, length = 50)
+	public String getCmdId() {
+		return this.cmdId;
+	}
+
+	public void setCmdId(String cmdId) {
+		this.cmdId = cmdId;
+	}
+
+	@Column(name = "PROTOCOL_NO", nullable = false, precision = 22, scale = 0)
+	public Integer getProtocolNo() {
+		return this.protocolNo;
+	}
+
+	public void setProtocolNo(Integer protocolNo) {
+		this.protocolNo = protocolNo;
+	}
+
+	@Column(name = "AFN", nullable = false, length = 50)
+	public String getAfn() {
+		return this.afn;
+	}
+
+	public void setAfn(String afn) {
+		this.afn = afn;
+	}
+
+	@Column(name = "FN", nullable = false, length = 50)
+	public String getFn() {
+		return this.fn;
+	}
+
+	public void setFn(String fn) {
+		this.fn = fn;
+	}
+
+	@Column(name = "AFN_NAME", nullable = false, length = 50)
+	public String getAfnName() {
+		return this.afnName;
+	}
+
+	public void setAfnName(String afnName) {
+		this.afnName = afnName;
+	}
+
+	@Column(name = "FN_NAME", nullable = false, length = 100)
+	public String getFnName() {
+		return this.fnName;
+	}
+
+	public void setFnName(String fnName) {
+		this.fnName = fnName;
+	}
+
+	@Column(name = "IS_TRANS", precision = 22, scale = 0)
+	public Integer getIsTrans() {
+		return this.isTrans;
+	}
+
+	public void setIsTrans(Integer isTrans) {
+		this.isTrans = isTrans;
+	}
+
+	@Column(name = "TRANS_CMD", length = 20)
+	public String getTransCmd() {
+		return this.transCmd;
+	}
+
+	public void setTransCmd(String transCmd) {
+		this.transCmd = transCmd;
+	}
+
+	@Column(name = "IS_ENABLED", nullable = false, precision = 22, scale = 0)
+	public Integer getIsEnabled() {
+		return this.isEnabled;
+	}
+
+	public void setIsEnabled(Integer isEnabled) {
+		this.isEnabled = isEnabled;
+	}
+
+	@Column(name = "IS_METER_CMD", precision = 22, scale = 0)
+	public Integer getIsMeterCmd() {
+		return this.isMeterCmd;
+	}
+
+	public void setIsMeterCmd(Integer isMeterCmd) {
+		this.isMeterCmd = isMeterCmd;
+	}
+
+	@Column(name = "SUPPORT_METER_TYPE", length = 100)
+	public String getSupportMeterType() {
+		return this.supportMeterType;
+	}
+
+	public void setSupportMeterType(String supportMeterType) {
+		this.supportMeterType = supportMeterType;
+	}
+
+	@Column(name = "IS_SHOW", length = 100)
+	public String getIsShow() {
+		return this.isShow;
+	}
+
+	public void setIsShow(String isShow) {
+		this.isShow = isShow;
+	}
+
+	@Column(name = "CMD_TYPE", precision = 22, scale = 0)
+	public Integer getCmdType() {
+		return this.cmdType;
+	}
+
+	public void setCmdType(Integer cmdType) {
+		this.cmdType = cmdType;
+	}
+
+	@Column(name = "PRIORITY", precision = 22, scale = 0)
+	public Integer getPriority() {
+		return this.priority;
+	}
+
+	public void setPriority(Integer priority) {
+		this.priority = priority;
+	}
+
+	@Column(name = "EXC_TIMES", precision = 22, scale = 0)
+	public Integer getExcTimes() {
+		return this.excTimes;
+	}
+
+	public void setExcTimes(Integer excTimes) {
+		this.excTimes = excTimes;
+	}
+
+	@Column(name = "CMD_STYLE", precision = 22, scale = 0)
+	public Integer getCmdStyle() {
+		return this.cmdStyle;
+	}
+
+	public void setCmdStyle(Integer cmdStyle) {
+		this.cmdStyle = cmdStyle;
+	}
+
+	@Column(name = "DATA_TYPE", precision = 22, scale = 0)
+	public Integer getDataType() {
+		return this.dataType;
+	}
+
+	public void setDataType(Integer dataType) {
+		this.dataType = dataType;
+	}
+
+	@Column(name = "HAVE_DETAIL_FLAG", length = 1)
+	public String getHaveDetailFlag() {
+		return this.haveDetailFlag;
+	}
+
+	public void setHaveDetailFlag(String haveDetailFlag) {
+		this.haveDetailFlag = haveDetailFlag;
+	}
+
+	@Column(name = "IS_USE_DOCUMENT", length = 1)
+	public String getIsUseDocument() {
+		return this.isUseDocument;
+	}
+
+	public void setIsUseDocument(String isUseDocument) {
+		this.isUseDocument = isUseDocument;
+	}
+
+	@Column(name = "INPUT_PARAM_COUNT", length = 1)
+	public String getInputParamCount() {
+		return this.inputParamCount;
+	}
+
+	public void setInputParamCount(String inputParamCount) {
+		this.inputParamCount = inputParamCount;
+	}
+
+	@Column(name = "OUTPUT_PARAM_COUNT", length = 1)
+	public String getOutputParamCount() {
+		return this.outputParamCount;
+	}
+
+	public void setOutputParamCount(String outputParamCount) {
+		this.outputParamCount = outputParamCount;
+	}
+
+	@Column(name = "IS_ENABLE_RELOAD", length = 1)
+	public String getIsEnableReload() {
+		return this.isEnableReload;
+	}
+
+	public void setIsEnableReload(String isEnableReload) {
+		this.isEnableReload = isEnableReload;
+	}
+
+	@Column(name = "PAGE_DEBUG_FLAG", length = 100)
+	public String getPageDebugFlag() {
+		return pageDebugFlag;
+	}
+
+	public void setPageDebugFlag(String pageDebugFlag) {
+		this.pageDebugFlag = pageDebugFlag;
+	}
+
+	@Column(name = "LINK_CARD_PROTOCOL", length = 100)
+	public String getLinkCardProtocol() {
+		return linkCardProtocol;
+	}
+
+	public void setLinkCardProtocol(String linkCardProtocol) {
+		this.linkCardProtocol = linkCardProtocol;
+	}
+
+	@Column(name = "DATA_FORMAT", length = 50)
+	public String getDataFormat() {
+		return this.dataFormat;
+	}
+
+	public void setDataFormat(String dataFormat) {
+		this.dataFormat = dataFormat;
+	}
+
+	@Column(name = "UNIT", length = 100)
+	public String getUnit() {
+		return this.unit;
+	}
+
+	public void setUnit(String unit) {
+		this.unit = unit;
+	}
+
+	@Column(name = "SERVICE_ID", length = 50)
+	public String getServiceId() {
+		return serviceId;
+	}
+
+	public void setServiceId(String serviceId) {
+		this.serviceId = serviceId;
+	}
+
+	@Column(name = "METHOD", length = 50)
+	public String getMethod() {
+		return method;
+	}
+
+	public void setMethod(String method) {
+		this.method = method;
+	}
+
+}

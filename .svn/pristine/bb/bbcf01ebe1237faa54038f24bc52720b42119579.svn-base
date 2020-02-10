@@ -1,0 +1,7 @@
+package com.wasion.meterreading.service;
+
+public interface UploadDataServiceI {
+
+	public void parseData(Object data);
+
+}

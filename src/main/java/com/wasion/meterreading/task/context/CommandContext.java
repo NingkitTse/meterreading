@@ -1,0 +1,62 @@
+package com.wasion.meterreading.task.context;
+
+import com.wasion.meterreading.entity.RtTaskOnlineV1910;
+import com.wasion.meterreading.entity.TCfgAppsConfig;
+import com.wasion.meterreading.entity.TCfgProtocolCmd;
+import com.wasion.meterreading.task.CommandProcessTask;
+
+/**
+ * 命令上下文
+ * 
+ * @author w24882 xieningjie
+ * @date 2019年12月18日
+ */
+public interface CommandContext {
+
+    String getSnMeter();
+
+    String getParameters();
+
+    String getParamJsonStr();
+
+    String getPlatform();
+
+    String getImei();
+
+    String getDeviceId();
+
+    String getCmdId();
+
+    RtTaskOnlineV1910 getTask();
+
+    TCfgAppsConfig getAppConfig();
+
+    TCfgProtocolCmd getProtocolCmd();
+
+    String getRequestMsg();
+
+    String getResponseMsg();
+
+    void process();
+    
+    default void fail(RtTaskOnlineV1910 command, String traceId, String remark) {
+        Integer maxExecuteTimes = command.getMaxExecuteTimes();
+        Integer executedTimes = command.getExecutedTimes();
+        if (executedTimes >= maxExecuteTimes) {
+            command.setSuccess(CommandProcessTask.STATE_EXECUTE_FAILURE);
+            command.setRemark(remark + ", traceId: " + traceId);
+            command.setExceptionCode(500);
+        }
+    }
+
+    default void fail(RtTaskOnlineV1910 command, String traceId) {
+        fail(command, traceId, "下发命令失败");
+    }
+
+    default void success(RtTaskOnlineV1910 task, String status, String commandId) {
+        task.setWlwCmdStatus(status);
+        task.setCommandId(commandId);
+        task.setSuccess(CommandProcessTask.STATE_EXECUTE_SUCCESS);
+    }
+
+}
